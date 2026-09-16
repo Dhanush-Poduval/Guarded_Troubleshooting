@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: guided_ai.db 
+    environment: 
+      POSTGRES_USER: troubleshoot_user
+      POSTGRES_PASSWORD: troubleshoot_password
+      POSTGRES_DB: troubleshooting
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data 
+    restart: unless-stopped
+volumes:
+  postgres_data: 
