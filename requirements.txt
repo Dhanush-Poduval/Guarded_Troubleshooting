@@ -7,3 +7,8 @@ pydantic-settings==2.15.0
 python-dotenv==1.2.3
 psycopg[binary,pool]==3.3.6
 pgvector==0.5.0
+# fastembed runs the embedding model on ONNX Runtime, so no torch dependency.
+fastembed==0.8.0
+rank-bm25==0.2.2
+# imported directly for BM25 stemming; also a fastembed dependency.
+py-rust-stemmers==0.1.8

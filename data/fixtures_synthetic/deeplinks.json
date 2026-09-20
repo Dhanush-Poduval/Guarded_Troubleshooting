@@ -1,0 +1,286 @@
+{
+  "_synthetic": true,
+  "_warning": "SYNTHETIC FIXTURE. Not official data. Delete when the real dataset arrives.",
+  "deeplinks": [
+    {
+      "deeplink": "bixby://masked/act/9001",
+      "description": "Open battery settings under Device care",
+      "message": "View remaining battery and usage",
+      "qna_description": "Shows current battery level and estimated time remaining",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9002",
+      "description": "Open battery usage by app",
+      "message": "See which apps drain the most power",
+      "qna_description": "Lists per-app battery consumption over recent days",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9003",
+      "description": "Toggle power saving mode",
+      "message": "Reduce background activity to extend battery",
+      "qna_description": "Enables power saving, limiting background data and performance",
+      "originalType": "toggle"
+    },
+    {
+      "deeplink": "bixby://masked/act/9004",
+      "description": "Open background usage limits",
+      "message": "Restrict apps running in the background",
+      "qna_description": "Controls deep sleeping, sleeping and never-sleeping app lists",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9005",
+      "description": "Toggle adaptive battery",
+      "message": "Learn usage patterns to save power",
+      "qna_description": "Limits battery for apps you rarely use",
+      "originalType": "toggle"
+    },
+    {
+      "deeplink": "bixby://masked/act/9006",
+      "description": "Open charging settings",
+      "message": "Configure fast and protective charging",
+      "qna_description": "Controls fast charging, super fast charging and battery protection",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9007",
+      "description": "Toggle fast charging",
+      "message": "Charge the device more quickly",
+      "qna_description": "Enables fast wired charging when a compatible charger is attached",
+      "originalType": "toggle"
+    },
+    {
+      "deeplink": "bixby://masked/act/9008",
+      "description": "Open wireless power sharing",
+      "message": "Share battery with another device",
+      "qna_description": "Allows charging accessories from the battery of this device",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9009",
+      "description": "Open battery protection settings",
+      "message": "Limit maximum charge to extend lifespan",
+      "qna_description": "Caps charging at a reduced percentage to preserve battery health",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9010",
+      "description": "Open device care diagnostics",
+      "message": "Run a full device health check",
+      "qna_description": "Scans battery, storage and memory and reports problems",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9101",
+      "description": "Open display settings",
+      "message": "Adjust screen appearance and behaviour",
+      "qna_description": "Top level screen for brightness, mode and resolution",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9102",
+      "description": "Open brightness settings",
+      "message": "Change how bright the screen is",
+      "qna_description": "Controls manual brightness and adaptive brightness behaviour",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9103",
+      "description": "Toggle adaptive brightness",
+      "message": "Adjust brightness to your surroundings",
+      "qna_description": "Automatically tunes brightness based on ambient light",
+      "originalType": "toggle"
+    },
+    {
+      "deeplink": "bixby://masked/act/9104",
+      "description": "Open screen timeout settings",
+      "message": "Set how long before the screen sleeps",
+      "qna_description": "Controls the idle delay before the display turns off",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9105",
+      "description": "Open navigation bar settings under Display",
+      "message": "Choose navigation type",
+      "qna_description": "Switches between button navigation and swipe gestures",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9106",
+      "description": "Open screen resolution settings",
+      "message": "Change display sharpness",
+      "qna_description": "Selects between HD, FHD and QHD screen resolution",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9107",
+      "description": "Open motion smoothness settings",
+      "message": "Change the screen refresh rate",
+      "qna_description": "Switches between standard and adaptive refresh rate",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9108",
+      "description": "Toggle blue light filter",
+      "message": "Reduce eye strain at night",
+      "qna_description": "Applies a warm colour filter to the display",
+      "originalType": "toggle"
+    },
+    {
+      "deeplink": "bixby://masked/act/9109",
+      "description": "Open screen mode and colour settings",
+      "message": "Adjust colour vividness",
+      "qna_description": "Switches between vivid and natural screen colour profiles",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9110",
+      "description": "Open always on display settings",
+      "message": "Show information on a sleeping screen",
+      "qna_description": "Controls when the always on display appears",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9201",
+      "description": "Open camera settings",
+      "message": "Configure how the camera behaves",
+      "qna_description": "Top level screen for camera capture options",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9202",
+      "description": "Open rear camera resolution settings",
+      "message": "Change photo size and quality",
+      "qna_description": "Selects megapixel count and aspect ratio for the rear camera",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9203",
+      "description": "Open video resolution settings",
+      "message": "Change recording quality",
+      "qna_description": "Selects video resolution and frame rate for recording",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9204",
+      "description": "Toggle scene optimiser",
+      "message": "Improve photos automatically",
+      "qna_description": "Detects the scene and adjusts capture settings",
+      "originalType": "toggle"
+    },
+    {
+      "deeplink": "bixby://masked/act/9205",
+      "description": "Open camera grid and guide settings",
+      "message": "Show composition guides",
+      "qna_description": "Displays gridlines to help frame a photo",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9206",
+      "description": "Toggle video stabilisation",
+      "message": "Reduce blur while recording",
+      "qna_description": "Applies stabilisation during video capture",
+      "originalType": "toggle"
+    },
+    {
+      "deeplink": "bixby://masked/act/9207",
+      "description": "Open camera storage location settings",
+      "message": "Choose where photos are saved",
+      "qna_description": "Selects internal storage or memory card for captures",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9208",
+      "description": "Reset camera settings to default",
+      "message": "Restore original camera configuration",
+      "qna_description": "Returns all camera options to factory defaults",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9209",
+      "description": "Open camera permissions",
+      "message": "Control which apps use the camera",
+      "qna_description": "Manages per-app access to the camera hardware",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9210",
+      "description": "Clean the camera lens",
+      "message": "Wipe the lens to remove smudges",
+      "qna_description": "Physical guidance for removing smudges from the lens",
+      "originalType": "manual"
+    },
+    {
+      "deeplink": "bixby://masked/act/9301",
+      "description": "Open device care memory settings",
+      "message": "Free up memory used by apps",
+      "qna_description": "Shows memory usage and lets you close background apps",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9302",
+      "description": "Open storage settings",
+      "message": "Free up space on the device",
+      "qna_description": "Shows storage usage and removable files",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9303",
+      "description": "Open app info and cache settings",
+      "message": "Clear cached data for an app",
+      "qna_description": "Per-app storage, cache and data controls",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9304",
+      "description": "Toggle processing speed mode",
+      "message": "Prioritise performance over battery",
+      "qna_description": "Switches between optimised and high performance profiles",
+      "originalType": "toggle"
+    },
+    {
+      "deeplink": "bixby://masked/act/9305",
+      "description": "Open software update settings",
+      "message": "Install the latest system update",
+      "qna_description": "Checks for and installs firmware updates",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9306",
+      "description": "Open running services",
+      "message": "See what is running in the background",
+      "qna_description": "Lists active background services and their memory use",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9307",
+      "description": "Open animation scale settings",
+      "message": "Speed up interface animations",
+      "qna_description": "Adjusts window, transition and animator duration scales",
+      "originalType": "screen"
+    },
+    {
+      "deeplink": "bixby://masked/act/9308",
+      "description": "Restart the device",
+      "message": "Restart to clear temporary problems",
+      "qna_description": "Performs a normal restart of the device",
+      "originalType": "critical"
+    },
+    {
+      "deeplink": "bixby://masked/act/9309",
+      "description": "Restart in safe mode",
+      "message": "Start with third party apps disabled",
+      "qna_description": "Boots the device with only preinstalled apps active",
+      "originalType": "critical"
+    },
+    {
+      "deeplink": "bixby://masked/act/9310",
+      "description": "Reset all settings",
+      "message": "Return all settings to default",
+      "qna_description": "Resets system settings without deleting personal files",
+      "originalType": "critical"
+    }
+  ]
+}

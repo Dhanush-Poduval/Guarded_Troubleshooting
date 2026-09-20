@@ -1,0 +1,96 @@
+{
+  "_synthetic": true,
+  "_warning": "SYNTHETIC FIXTURE. Not official data. Delete when the real dataset arrives.",
+  "queries": [
+    {
+      "domain": "Battery",
+      "query": "My battery is draining very quickly"
+    },
+    {
+      "domain": "Battery",
+      "query": "Phone takes forever to charge"
+    },
+    {
+      "domain": "Battery",
+      "query": "Battery percentage drops suddenly overnight"
+    },
+    {
+      "domain": "Battery",
+      "query": "How do I make my battery last longer"
+    },
+    {
+      "domain": "Display",
+      "query": "Screen is too dim outdoors"
+    },
+    {
+      "domain": "Display",
+      "query": "Swipe gestures go the wrong way after installing an app"
+    },
+    {
+      "domain": "Display",
+      "query": "Screen turns off too fast"
+    },
+    {
+      "domain": "Display",
+      "query": "Colours look washed out on my screen"
+    },
+    {
+      "domain": "Camera",
+      "query": "My photos look blurry"
+    },
+    {
+      "domain": "Camera",
+      "query": "How do I change the camera resolution"
+    },
+    {
+      "domain": "Camera",
+      "query": "Videos come out shaky when I record"
+    },
+    {
+      "domain": "Camera",
+      "query": "Camera app will not open"
+    },
+    {
+      "domain": "Performance",
+      "query": "My phone got slow after the update"
+    },
+    {
+      "domain": "Performance",
+      "query": "Apps keep closing on their own"
+    },
+    {
+      "domain": "Performance",
+      "query": "Device feels laggy when switching apps"
+    },
+    {
+      "domain": "Performance",
+      "query": "Running out of storage space"
+    }
+  ],
+  "paraphrase_pairs": [
+    {
+      "original": "My battery is draining very quickly",
+      "paraphrase": "My phone battery dies really fast"
+    },
+    {
+      "original": "Phone takes forever to charge",
+      "paraphrase": "Charging is super slow on my device"
+    },
+    {
+      "original": "Screen is too dim outdoors",
+      "paraphrase": "I cannot see my display in sunlight"
+    },
+    {
+      "original": "My photos look blurry",
+      "paraphrase": "Pictures are coming out fuzzy"
+    },
+    {
+      "original": "My phone got slow after the update",
+      "paraphrase": "Device became sluggish since the latest update"
+    },
+    {
+      "original": "Running out of storage space",
+      "paraphrase": "There is no space left on my phone"
+    }
+  ]
+}
