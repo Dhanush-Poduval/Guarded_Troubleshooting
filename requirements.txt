@@ -12,3 +12,5 @@ fastembed==0.8.0
 rank-bm25==0.2.2
 # imported directly for BM25 stemming; also a fastembed dependency.
 py-rust-stemmers==0.1.8
+# imported directly by the service to move CPU-bound encoding off the event loop.
+anyio==4.14.2
