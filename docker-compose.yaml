@@ -1,15 +1,43 @@
 services:
   postgres:
+    # Stock pgvector image on Postgres 17. The major version is deliberately left
+    # unchanged: POSTGRES_USER / POSTGRES_DB / POSTGRES_PASSWORD only take effect on an
+    # empty volume, and a major-version bump would refuse to start against existing data.
     image: pgvector/pgvector:pg17
-    container_name: guided_ai.db 
-    environment: 
-      POSTGRES_USER: troubleshoot_user
-      POSTGRES_PASSWORD: troubleshoot_password
-      POSTGRES_DB: troubleshooting
+    container_name: guided_ai.db
+    environment:
+      # Defaults match the previously hardcoded values so an existing postgres_data
+      # volume keeps authenticating. Override in .env (see .env.example).
+      POSTGRES_USER: ${POSTGRES_USER:-troubleshoot_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-troubleshoot_password}
+      POSTGRES_DB: ${POSTGRES_DB:-troubleshooting}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data 
+      - postgres_data:/var/lib/postgresql/data
+      # Runs only when the data volume is empty. The migration runner also creates the
+      # extension, so a pre-existing volume is still handled correctly.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # $$ escapes to a literal $ so the shell reads the container's own environment
+      # rather than compose interpolating at parse time.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    # pgvector warns that parallel index builds fail when Docker's shared memory is
+    # smaller than maintenance_work_mem, so shm_size is kept at or above it.
+    shm_size: 512mb
+    command:
+      - postgres
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_parallel_maintenance_workers=4
+      - -c
+      - shared_buffers=256MB
     restart: unless-stopped
+
 volumes:
-  postgres_data: 
+  postgres_data:

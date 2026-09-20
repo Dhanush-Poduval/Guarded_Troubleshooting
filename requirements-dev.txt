@@ -1,0 +1,5 @@
+# Development and test dependencies. Kept separate from requirements.txt so the runtime
+# dependency list stays minimal and the shared file needs fewer edits.
+-r requirements.txt
+
+pytest==9.1.1

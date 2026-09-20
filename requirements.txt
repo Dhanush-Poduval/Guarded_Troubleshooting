@@ -1,3 +1,9 @@
 fastapi==0.115.0
 uvicorn==0.32.0
 pydantic==2.9.2
+
+# --- Phase 3/4: semantic retrieval, semantic cache, REST API service ---
+pydantic-settings==2.15.0
+python-dotenv==1.2.3
+psycopg[binary,pool]==3.3.6
+pgvector==0.5.0
