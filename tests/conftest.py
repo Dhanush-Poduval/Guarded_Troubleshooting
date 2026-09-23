@@ -31,6 +31,18 @@ def db_connection(settings):
             f"PostgreSQL not reachable at {settings.safe_database_url} ({exc}). "
             "Start it with: docker compose up -d"
         )
+    # Register pgvector adapters here rather than leaving it to whichever test happens to
+    # do it first. Without them a numpy array binds as double precision[] and every vector
+    # query fails with "cannot adapt type 'ndarray'". Relying on collection order meant
+    # tests/test_retrieval.py passed only when tests/test_database_setup.py ran before it.
+    try:
+        from pgvector.psycopg import register_vector
+
+        register_vector(conn)
+    except Exception as exc:  # noqa: BLE001
+        conn.close()
+        pytest.skip(f"pgvector extension not available ({exc}); run scripts.init_db")
+
     with conn:
         yield conn
 
