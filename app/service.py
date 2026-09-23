@@ -56,6 +56,8 @@ class TroubleshootOutcome:
     cost_usd: float
     model: str | None
     cache_version: int
+    runner_up_similarity: float | None = None
+    cache_reject_reason: str | None = None
     fallback: str | None = None
     validation_errors: list[str] = field(default_factory=list)
 
@@ -113,11 +115,14 @@ class TroubleshootingService:
         embed_ms = (time.perf_counter() - embed_started) * 1000
 
         lookup_ms = 0.0
+        miss = None
         async with self._pool.connection() as conn:
             hit = None
             if not force_pipeline:
                 lookup_started = time.perf_counter()
-                hit = await store.lookup(conn, query_vector, self._settings)
+                hit, miss = await store.lookup_detailed(
+                    conn, query_vector, self._settings
+                )
                 lookup_ms = (time.perf_counter() - lookup_started) * 1000
 
             if hit is not None:
@@ -141,6 +146,7 @@ class TroubleshootingService:
                         cost_usd=0.0,
                         model=None,
                         cache_version=hit.cache_version,
+                        runner_up_similarity=hit.runner_up_similarity,
                     )
                     await self._record(conn, outcome, matched_plan_id=hit.plan_id,
                                        validation_passed=True)
@@ -149,6 +155,9 @@ class TroubleshootingService:
                 logger.warning(
                     "cached plan %d failed re-validation, treating as a miss: %s",
                     hit.plan_id, report.summary(),
+                )
+                miss = store.CacheMiss(
+                    reason="failed_revalidation", best_similarity=hit.similarity
                 )
 
         # --- miss path -------------------------------------------------------
@@ -192,6 +201,10 @@ class TroubleshootingService:
                 cost_usd=result.meta.cost_usd,
                 model=result.meta.model,
                 cache_version=self._settings.cache_version,
+                runner_up_similarity=miss.runner_up_similarity if miss else None,
+                cache_reject_reason=(
+                    miss.reason if miss and miss.reason != "empty" else None
+                ),
                 fallback=fallback,
                 validation_errors=[str(v) for v in report.violations],
             )
@@ -254,6 +267,8 @@ class TroubleshootingService:
                 pipeline_ms=outcome.pipeline_ms,
                 cost_usd=outcome.cost_usd,
                 cache_version=outcome.cache_version,
+                runner_up_similarity=outcome.runner_up_similarity,
+                cache_reject_reason=outcome.cache_reject_reason,
             )
         except Exception:
             # Metrics are observability, not correctness. A failure to record must never

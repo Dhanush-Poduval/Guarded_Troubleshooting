@@ -38,6 +38,24 @@ class CacheHit:
     query_variations: list[str]
     cache_version: int
     catalog_source: str
+    # Best similarity achieved by any OTHER plan, and the gap to it. None when only one
+    # plan is cached, in which case there is nothing to be ambiguous with.
+    runner_up_similarity: float | None = None
+
+    @property
+    def margin(self) -> float | None:
+        if self.runner_up_similarity is None:
+            return None
+        return self.similarity - self.runner_up_similarity
+
+
+@dataclass(frozen=True)
+class CacheMiss:
+    """Why a lookup did not produce a usable hit, for metrics and for debugging."""
+
+    reason: str  # 'empty' | 'below_threshold' | 'ambiguous'
+    best_similarity: float | None = None
+    runner_up_similarity: float | None = None
 
 
 async def lookup(
@@ -47,11 +65,28 @@ async def lookup(
     *,
     threshold: float | None = None,
 ) -> CacheHit | None:
-    """Find the best cached plan whose similarity clears the threshold.
+    """Find the best cached plan, or None.
 
-    Searches every stored phrasing and keeps the best, so a plan is reachable through any
-    of its paraphrases rather than only its canonical form.
+    Two conditions must hold. The best match must clear the similarity threshold, and it
+    must beat the best match belonging to any other plan by the configured margin.
+
+    The margin exists because on this dataset a threshold alone is not discriminative:
+    every query concerns the screen, so two genuinely different problems can be phrased
+    almost identically. When two plans are near-equally close, answering from either is a
+    guess, and a wrong plan is worse than a slow one.
     """
+    hit, _ = await lookup_detailed(conn, query_vector, settings, threshold=threshold)
+    return hit
+
+
+async def lookup_detailed(
+    conn: AsyncConnection,
+    query_vector: np.ndarray,
+    settings: Settings | None = None,
+    *,
+    threshold: float | None = None,
+) -> tuple[CacheHit | None, CacheMiss | None]:
+    """lookup(), but also reporting why a miss happened."""
     settings = settings or get_settings()
     threshold = settings.cache_similarity_threshold if threshold is None else threshold
 
@@ -77,32 +112,65 @@ async def lookup(
             JOIN plan_cache p ON p.id = v.plan_id
             WHERE p.cache_version = %s
             ORDER BY v.embedding <=> %s, p.id, v.id
-            LIMIT 1
+            LIMIT %s
             """,
-            (query_vector, settings.cache_version, query_vector),
+            (
+                query_vector,
+                settings.cache_version,
+                query_vector,
+                int(settings.cache_candidate_pool),
+            ),
         )
-        row = await cur.fetchone()
+        rows = await cur.fetchall()
 
-    if row is None:
-        return None
+    if not rows:
+        return None, CacheMiss(reason="empty")
 
-    similarity = float(row[1])
-    if similarity < threshold:
-        logger.debug(
-            "cache miss: best similarity %.4f below threshold %.4f", similarity, threshold
+    best = rows[0]
+    best_similarity = float(best[1])
+
+    # The best row belonging to a different plan. Rows are already distance-ordered, so
+    # the first one that appears is that plan's best.
+    runner = next((row for row in rows if row[0] != best[0]), None)
+    runner_similarity = float(runner[1]) if runner is not None else None
+
+    if best_similarity < threshold:
+        return None, CacheMiss(
+            reason="below_threshold",
+            best_similarity=best_similarity,
+            runner_up_similarity=runner_similarity,
         )
-        return None
 
-    return CacheHit(
-        plan_id=row[0],
-        similarity=similarity,
-        matched_text=row[2],
-        variation_kind=row[3],
-        canonical_query=row[4],
-        plan=ContextDeeplinkResponse.model_validate(row[5]),
-        query_variations=list(row[6] or []),
-        cache_version=row[7],
-        catalog_source=row[8],
+    if (
+        runner_similarity is not None
+        and best_similarity - runner_similarity < settings.cache_ambiguity_margin
+    ):
+        logger.info(
+            "cache lookup ambiguous: best %.4f vs runner-up %.4f from another plan "
+            "(margin %.4f < %.4f), falling through to the pipeline",
+            best_similarity, runner_similarity,
+            best_similarity - runner_similarity, settings.cache_ambiguity_margin,
+        )
+        return None, CacheMiss(
+            reason="ambiguous",
+            best_similarity=best_similarity,
+            runner_up_similarity=runner_similarity,
+        )
+
+    return (
+        CacheHit(
+            plan_id=best[0],
+            similarity=best_similarity,
+            matched_text=best[2],
+            variation_kind=best[3],
+            canonical_query=best[4],
+            plan=ContextDeeplinkResponse.model_validate(best[5]),
+            query_variations=list(best[6] or []),
+            cache_version=best[7],
+            catalog_source=best[8],
+            runner_up_similarity=runner_similarity,
+        ),
+        None,
     )
 
 
@@ -217,19 +285,21 @@ async def record_metrics(
     pipeline_ms: float | None,
     cost_usd: float,
     cache_version: int,
+    runner_up_similarity: float | None = None,
+    cache_reject_reason: str | None = None,
 ) -> None:
     await conn.execute(
         """
         INSERT INTO request_metrics
             (request_id, query, cache_hit, similarity, matched_plan_id, pipeline_invoked,
              validation_passed, fallback, latency_ms, embed_ms, lookup_ms, pipeline_ms,
-             cost_usd, cache_version)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             cost_usd, cache_version, runner_up_similarity, cache_reject_reason)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             request_id, query, cache_hit, similarity, matched_plan_id, pipeline_invoked,
             validation_passed, fallback, latency_ms, embed_ms, lookup_ms, pipeline_ms,
-            cost_usd, cache_version,
+            cost_usd, cache_version, runner_up_similarity, cache_reject_reason,
         ),
     )
 
@@ -251,6 +321,16 @@ async def cache_stats(conn: AsyncConnection, settings: Settings | None = None) -
 
     cur = await conn.execute("SELECT count(*) FROM plan_cache_vector")
     vectors = (await cur.fetchone())[0]
+
+    cur = await conn.execute(
+        """
+        SELECT count(*) FILTER (WHERE cache_reject_reason = 'below_threshold'),
+               count(*) FILTER (WHERE cache_reject_reason = 'ambiguous'),
+               count(*) FILTER (WHERE cache_reject_reason = 'failed_revalidation')
+        FROM request_metrics
+        """
+    )
+    below, ambiguous, revalidation = await cur.fetchone()
 
     cur = await conn.execute(
         """
@@ -286,4 +366,8 @@ async def cache_stats(conn: AsyncConnection, settings: Settings | None = None) -
         "miss_latency_p50_ms": float(miss_p50) if miss_p50 is not None else None,
         "miss_latency_p95_ms": float(miss_p95) if miss_p95 is not None else None,
         "total_cost_usd": float(cost),
+        "ambiguity_margin": settings.cache_ambiguity_margin,
+        "rejected_below_threshold": below,
+        "rejected_ambiguous": ambiguous,
+        "rejected_failed_revalidation": revalidation,
     }

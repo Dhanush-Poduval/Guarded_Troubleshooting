@@ -21,8 +21,8 @@ from app.retrieval.resolver import (
     tokenize,
 )
 
-FIXTURE_CATALOG = pathlib.Path("data/fixtures_synthetic/deeplinks.json")
-FIXTURE_QUERIES = pathlib.Path("data/fixtures_synthetic/queries.json")
+OFFICIAL_CATALOG = pathlib.Path("data/official/deeplinks.json")
+OFFICIAL_QUERIES = pathlib.Path("data/official/siis_responses.json")
 
 
 # --------------------------------------------------------------------------
@@ -33,23 +33,59 @@ def test_match_text_never_contains_the_uri():
     """Matching must run on descriptive metadata, never the masked URI, which is an
     obfuscated token carrying no meaning."""
     entry = CatalogEntry(
-        deeplink="bixby://masked/act/9001",
+        deeplink="bixby://masked/act/aa73a35e8d",
         description="Open battery settings",
         message="View usage",
         qna_description="Shows battery level",
-        original_type="screen",
+        original_type=None,
     )
     assert "bixby" not in entry.match_text
-    assert "9001" not in entry.match_text
+    assert "aa73a35e8d" not in entry.match_text
     assert entry.match_text == "Open battery settings View usage Shows battery level"
 
 
-def test_synthetic_catalog_is_flagged_as_synthetic():
-    if not FIXTURE_CATALOG.exists():
-        pytest.skip("fixtures not generated")
-    catalog = load_catalog(FIXTURE_CATALOG)
-    assert catalog.is_synthetic is True
-    assert catalog.source == "synthetic"
+def test_original_type_is_expanded_into_words_not_kept_as_a_token():
+    """offURL and onURL distinguish turning a setting off from on, which a step like
+    "turn off adaptive brightness" depends on. The raw token is not English, so it is
+    expanded rather than embedded verbatim."""
+    off = CatalogEntry("d", "Adaptive brightness", "Toggle", "", "offURL")
+    on = CatalogEntry("d", "Adaptive brightness", "Toggle", "", "onURL")
+    assert "offURL" not in off.match_text
+    assert "off" in off.match_text.lower()
+    assert "on" in on.match_text.lower()
+    assert off.match_text != on.match_text
+
+
+def test_official_catalog_loads_and_is_flagged_official():
+    if not OFFICIAL_CATALOG.exists():
+        pytest.skip("official catalog not present")
+    catalog = load_catalog(OFFICIAL_CATALOG)
+    assert catalog.source == "official"
+    assert catalog.is_synthetic is False
+    assert len(catalog.entries) == 578
+
+
+def test_official_catalog_validation_blocks_are_parsed():
+    """Most entries carry a validation deeplink; a subset carries the full comparison."""
+    if not OFFICIAL_CATALOG.exists():
+        pytest.skip("official catalog not present")
+    catalog = load_catalog(OFFICIAL_CATALOG)
+    with_validation = [e for e in catalog.entries if e.validation]
+    complete = [e for e in with_validation if e.validation.is_complete]
+    assert len(with_validation) == 570
+    assert len(complete) == 138
+    sample = complete[0].validation
+    assert sample.deeplink.startswith("bixby://masked/val/")
+    assert sample.result_type in {"boolean", "integer", "str", "float"}
+    assert sample.condition in {"greater", "equal", "less"}
+
+
+def test_dummy_positive_is_an_actual_catalog_entry():
+    """The reserved placeholder ships in the catalog rather than being special-cased."""
+    if not OFFICIAL_CATALOG.exists():
+        pytest.skip("official catalog not present")
+    catalog = load_catalog(OFFICIAL_CATALOG)
+    assert "bixby://dummy_positive" in catalog.deeplink_set()
 
 
 def test_loader_rejects_duplicate_uris(tmp_path):
@@ -195,10 +231,11 @@ def test_resolve_returns_a_real_catalog_entry(db_connection, bm25, encoder):
         row[0]
         for row in db_connection.execute("SELECT deeplink FROM deeplink_catalog").fetchall()
     }
-    queries = json.loads(FIXTURE_QUERIES.read_text(encoding="utf-8"))["queries"]
-    for item in queries:
+    from app.catalog.queries import load_queries
+
+    for record in load_queries(OFFICIAL_QUERIES):
         match = resolve_deeplink(
-            db_connection, item["query"], bm25_index=bm25, encoder=encoder
+            db_connection, record.query, bm25_index=bm25, encoder=encoder
         )
         assert match is not None
         assert match.deeplink in permitted
@@ -249,21 +286,45 @@ def test_gibberish_still_returns_only_catalog_members(db_connection, bm25, encod
 @pytest.mark.parametrize(
     "query, expected_fragment",
     [
-        ("Swipe gestures go the wrong way after installing an app", "navigation bar"),
-        ("How do I change the camera resolution", "camera resolution"),
-        ("Running out of storage space", "storage"),
-        ("Videos come out shaky when I record", "stabilisation"),
+        ("adjust screen brightness", "brightness"),
+        ("change the screen timeout duration", "timeout"),
+        ("enable blue light filter at night", "eye comfort"),
+        ("back up my data to Samsung Cloud", "back up data"),
     ],
 )
 def test_known_queries_reach_the_expected_screen(
     db_connection, bm25, encoder, query, expected_fragment
 ):
-    """FIXTURE-DEPENDENT. These pin regressions in fusion behaviour against the synthetic
-    catalog and must be rewritten against the official catalog when it arrives.
+    """CATALOG-DEPENDENT. Pins fusion behaviour against the official 578-entry catalog.
 
-    The shaky-video case specifically guards the tokenizer fix: before stopword removal
-    and stemming it resolved to an unrelated display screen.
+    "enable blue light filter" is the interesting one: Samsung's screen for it is called
+    Eye Comfort Shield, so a keyword-only retriever would miss it entirely and only the
+    dense arm can bridge the vocabulary gap.
     """
     match = resolve_deeplink(db_connection, query, bm25_index=bm25, encoder=encoder)
     assert match is not None
-    assert expected_fragment.lower() in match.description.lower()
+    haystack = f"{match.description} {match.message}".lower()
+    assert expected_fragment.lower() in haystack
+
+
+def test_resolution_matches_the_official_sample_deeplink(db_connection, bm25, encoder):
+    """The official sample_output.json pairs a backup action with a specific URI.
+    Retrieving that same URI from a natural-language intent is an independent check that
+    matching on descriptive metadata actually lands on the right screen."""
+    match = resolve_deeplink(
+        db_connection, "back up my data to Samsung Cloud", bm25_index=bm25, encoder=encoder
+    )
+    assert match is not None
+    assert match.deeplink == "bixby://masked/act/b3ed3ed663"
+
+
+def test_resolved_matches_carry_validation_data_when_the_catalog_has_it(
+    db_connection, bm25, encoder
+):
+    """Plans can only emit validationDeeplink if retrieval carries it through."""
+    match = resolve_deeplink(
+        db_connection, "back up my data to Samsung Cloud", bm25_index=bm25, encoder=encoder
+    )
+    assert match is not None
+    assert match.validation_deeplink is not None
+    assert match.validation_key is not None

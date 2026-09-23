@@ -81,6 +81,11 @@ class CatalogMatch:
     message: str
     qna_description: str
     original_type: str | None
+    validation_deeplink: str | None
+    validation_key: str | None
+    validation_result_type: str | None
+    validation_condition: str | None
+    validation_value: str | None
     cosine_similarity: float | None
     vector_rank: int | None
     bm25_rank: int | None
@@ -196,7 +201,9 @@ def search_catalog(
 
     rows = conn.execute(
         """
-        SELECT id, deeplink, description, message, qna_description, original_type
+        SELECT id, deeplink, description, message, qna_description, original_type,
+               validation_deeplink, validation_key, validation_result_type,
+               validation_condition, validation_value
         FROM deeplink_catalog WHERE id = ANY(%s)
         """,
         (ids,),
@@ -216,6 +223,11 @@ def search_catalog(
                 message=row[3],
                 qna_description=row[4],
                 original_type=row[5],
+                validation_deeplink=row[6],
+                validation_key=row[7],
+                validation_result_type=row[8],
+                validation_condition=row[9],
+                validation_value=row[10],
                 cosine_similarity=similarity.get(cid),
                 vector_rank=dense_rank.get(cid),
                 bm25_rank=sparse_rank.get(cid),

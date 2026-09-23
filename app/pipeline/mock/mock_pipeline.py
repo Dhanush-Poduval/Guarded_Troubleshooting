@@ -28,10 +28,13 @@ import psycopg
 from app.config import Settings, get_settings
 from app.contract.schema import (
     Action,
+    Condition,
     ContextDeeplinkResponse,
     Deeplink,
     Goal,
+    ResultTypes,
     StepGroup,
+    ValidationDeepLink,
     actionCategory,
 )
 from app.embeddings.encoder import Encoder
@@ -117,17 +120,54 @@ def _title_case(text: str) -> str:
     return " ".join(out)
 
 
+# The official catalog's originalType values are onURL, offURL, onClickURL, updateURL
+# and placeholder. None of them encodes whether an action is disruptive, so category has
+# to be inferred from what the action actually does. Physical interventions and
+# destructive operations are recognised by their language.
+_MANUAL_MARKERS = (
+    "service center", "service centre", "contact samsung", "contact support",
+    "authorized", "authorised", "technician", "repair", "replace the",
+    "physically", "clean the", "visit",
+)
+_CRITICAL_MARKERS = (
+    "factory reset", "factory data reset", "reset all", "erase all",
+    "restart", "reboot", "safe mode", "firmware", "software update",
+    "format", "wipe",
+)
+
+
+def _classify(*texts: str) -> "actionCategory":
+    blob = " ".join(t.lower() for t in texts if t)
+    if any(marker in blob for marker in _MANUAL_MARKERS):
+        return actionCategory.manual
+    if any(marker in blob for marker in _CRITICAL_MARKERS):
+        return actionCategory.critical
+    return actionCategory.auto
+
+
+def _action_name(description: str, message: str) -> str:
+    """Title Case, naming one screen. The catalog message is the shorter, more
+    screen-like of the two fields, so it is preferred."""
+    text = (message or description).strip().rstrip(".")
+    for prefix in ("Opens the ", "Opens ", "Open the ", "Open ", "Enables ", "Enable ",
+                   "Configures ", "Configure ", "Switches ", "Switch ", "Sets ", "Set "):
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+            break
+    return _title_case(text)
+
+
 # Words that read badly as the last word of a truncated phrase.
 _DANGLING = frozenset(
     {"the", "a", "an", "and", "or", "of", "to", "for", "from", "with", "in", "on", "by"}
 )
 
 
-def _five_to_seven_words(description: str) -> str:
-    """Force the "It will" + 5 to 7 word rule structurally rather than hoping for it.
+def _describe(description: str, max_words: int = 7) -> str:
+    """Build the "It will ..." description structurally rather than hoping for compliance.
 
-    The rule is enforced by construction because the validator rejects anything outside
-    5 to 7 words, and a generator that merely tries to comply will drift.
+    Capped at 7 body-inclusive words: that satisfies the written rule and also sits inside
+    the wider bound the official sample implies, so output is valid either way.
     """
     body = [w.strip(".,") for w in description.split() if w.strip(".,")]
     if body:
@@ -190,15 +230,8 @@ class MockPipeline:
         actions: list[Action] = []
 
         for match in matches[:3]:
-            is_critical = (match.original_type or "") == "critical"
-            is_manual = (match.original_type or "") == "manual"
-            category = (
-                actionCategory.critical
-                if is_critical
-                else actionCategory.manual
-                if is_manual
-                else actionCategory.auto
-            )
+            category = _classify(match.description, match.message)
+            is_manual = category == actionCategory.manual
 
             steps = [
                 "Navigate to and open Settings.",
@@ -218,11 +251,38 @@ class MockPipeline:
                 )
             )
 
+            # Only 138 of 578 catalog entries carry the comparison needed for a complete
+            # ValidationDeepLink, so it is emitted only where the catalog supports it
+            # rather than being invented.
+            validation = None
+            if not is_manual and match.validation_deeplink and match.validation_key:
+                validation = ValidationDeepLink(
+                    deeplink=match.validation_deeplink,
+                    key=match.validation_key,
+                    resultType=(
+                        ResultTypes(match.validation_result_type)
+                        if match.validation_result_type
+                        else None
+                    ),
+                    condition=(
+                        Condition(match.validation_condition)
+                        if match.validation_condition
+                        else None
+                    ),
+                    value=match.validation_value,
+                )
+
             actions.append(
                 Action(
-                    actionName=_title_case(match.description.replace("Open ", "")),
-                    description=_five_to_seven_words(match.message or match.description),
-                    stepGroups=[StepGroup(steps=steps, actionableDeeplink=actionable)],
+                    actionName=_action_name(match.description, match.message),
+                    description=_describe(match.message or match.description),
+                    stepGroups=[
+                        StepGroup(
+                            steps=steps,
+                            actionableDeeplink=actionable,
+                            validationDeeplink=validation,
+                        )
+                    ],
                     category=category,
                 )
             )

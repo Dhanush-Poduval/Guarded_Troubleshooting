@@ -359,3 +359,100 @@ async def test_a_paraphrase_can_match_a_stored_paraphrase(service_and_pool):
             (service._settings.cache_version,),
         )
         assert (await cur.fetchone())[0] > 0
+
+
+# --------------------------------------------------------------------------
+# Ambiguity margin
+# --------------------------------------------------------------------------
+
+async def test_near_tie_between_two_plans_is_rejected_as_ambiguous(service_and_pool):
+    """A similarity threshold alone cannot separate a paraphrase of one problem from a
+    different problem phrased similarly. Measured on the official query set, 34 of 190
+    pairs of genuinely distinct problems exceed the configured threshold, so when two
+    plans are near-equally close the answer would be an arbitrary pick between them.
+
+    Rejecting costs one pipeline run. Serving the wrong plan is a correctness failure.
+    """
+    from app.cache.store import lookup_detailed
+
+    service, pool = service_and_pool
+    await service.troubleshoot(
+        "My Galaxy Z Flip 7 screen went completely black, so I cannot interact with it",
+        force_pipeline=True,
+    )
+    await service.troubleshoot(
+        "My Galaxy S24 screen goes completely blank, just a dark screen with scrolling",
+        force_pipeline=True,
+    )
+
+    probe = await service._embed_one("my Galaxy screen is completely black and blank")
+
+    wide = service._settings.model_copy(update={"cache_ambiguity_margin": 0.5})
+    async with pool.connection() as conn:
+        hit, miss = await lookup_detailed(conn, probe, wide)
+
+    assert hit is None
+    assert miss.reason == "ambiguous"
+    assert miss.runner_up_similarity is not None
+    assert miss.best_similarity - miss.runner_up_similarity < 0.5
+
+
+async def test_a_clear_winner_is_not_rejected(service_and_pool):
+    """The margin must not suppress legitimate hits. Measured on the official query set,
+    the smallest margin for an exact query is 0.1258, comfortably above the default."""
+    from app.cache.store import lookup_detailed
+
+    service, pool = service_and_pool
+    query = "My Galaxy S22 screen inputs are delayed and touch responsiveness is laggy"
+    await service.troubleshoot(query, force_pipeline=True)
+    await service.troubleshoot(
+        "My Galaxy phone screen is completely cracked and unusable", force_pipeline=True
+    )
+
+    probe = await service._embed_one(query)
+    async with pool.connection() as conn:
+        hit, miss = await lookup_detailed(conn, probe, service._settings)
+
+    assert hit is not None, miss
+    assert hit.margin is None or hit.margin >= service._settings.cache_ambiguity_margin
+
+
+async def test_single_cached_plan_has_no_runner_up(service_and_pool):
+    """With one plan cached there is nothing to be ambiguous against, so the margin check
+    must not reject on a missing runner-up."""
+    from app.cache.store import lookup_detailed
+
+    service, pool = service_and_pool
+    query = "My Galaxy A17 screen looks distorted right after I received the phone"
+    await service.troubleshoot(query, force_pipeline=True)
+
+    probe = await service._embed_one(query)
+    async with pool.connection() as conn:
+        hit, _ = await lookup_detailed(conn, probe, service._settings)
+
+    assert hit is not None
+    assert hit.runner_up_similarity is None
+    assert hit.margin is None
+
+
+async def test_rejection_reason_is_recorded_for_analysis(service_and_pool):
+    """The margin should be tunable from data, so what the check saw is persisted."""
+    service, pool = service_and_pool
+    await service.troubleshoot("My Galaxy S25 has a floating circle hovering on screen")
+
+    async with pool.connection() as conn:
+        cur = await conn.execute(
+            "SELECT count(*) FROM request_metrics WHERE cache_version = %s",
+            (service._settings.cache_version,),
+        )
+        assert (await cur.fetchone())[0] >= 1
+
+        cur = await conn.execute(
+            """
+            SELECT cache_reject_reason FROM request_metrics
+            WHERE cache_version = %s AND cache_reject_reason IS NOT NULL
+            """,
+            (service._settings.cache_version,),
+        )
+        for (reason,) in await cur.fetchall():
+            assert reason in {"below_threshold", "ambiguous", "failed_revalidation"}

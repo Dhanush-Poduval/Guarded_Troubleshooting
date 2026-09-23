@@ -17,6 +17,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Iterable
 
+from app.config import get_settings
 from app.contract.schema import (
     DUMMY_POSITIVE_DEEPLINK,
     Action,
@@ -120,12 +121,16 @@ def validate_action(
     permitted_deeplinks: frozenset[str],
     report: ValidationReport,
     path: str,
+    *,
+    min_words: int = 5,
+    max_words: int = 15,
 ) -> None:
     if not is_title_case(action.actionName):
         report.add("action_name_case", "actionName must be Title Case", f"{path}.actionName")
     _check_strings_for_urls(report, action.actionName, f"{path}.actionName")
 
-    # Exactly 5 to 7 words, starting with "It will".
+    # Word count bounds come from settings; see Settings.description_max_words for why
+    # the upper bound follows the official sample rather than the written rule.
     description_words = words(action.description)
     if not action.description.startswith("It will"):
         report.add(
@@ -133,10 +138,11 @@ def validate_action(
             'description must start with "It will"',
             f"{path}.description",
         )
-    if not 5 <= len(description_words) <= 7:
+    if not min_words <= len(description_words) <= max_words:
         report.add(
             "description_length",
-            f"description must be 5 to 7 words, got {len(description_words)}",
+            f"description must be {min_words} to {max_words} words, "
+            f"got {len(description_words)}",
             f"{path}.description",
         )
     _check_strings_for_urls(report, action.description, f"{path}.description")
@@ -184,6 +190,9 @@ def validate_goal(
     permitted_deeplinks: frozenset[str],
     report: ValidationReport,
     path: str,
+    *,
+    min_words: int = 5,
+    max_words: int = 15,
 ) -> None:
     if not _GOAL_PATTERN.match(goal.goal):
         report.add(
@@ -215,7 +224,10 @@ def validate_goal(
         report.add("no_actions", "goal has no actions", f"{path}.actions")
 
     for index, action in enumerate(goal.actions):
-        validate_action(action, permitted_deeplinks, report, f"{path}.actions[{index}]")
+        validate_action(
+            action, permitted_deeplinks, report, f"{path}.actions[{index}]",
+            min_words=min_words, max_words=max_words,
+        )
 
     # Destructive operations must come last, so no non-critical action may follow a
     # critical one.
@@ -238,6 +250,8 @@ def validate_plan(
     permitted_deeplinks: Iterable[str],
     *,
     allow_dummy_positive: bool = True,
+    min_words: int | None = None,
+    max_words: int | None = None,
 ) -> ValidationReport:
     """Validate a complete response.
 
@@ -252,9 +266,17 @@ def validate_plan(
     if allow_dummy_positive:
         permitted = permitted | {DUMMY_POSITIVE_DEEPLINK}
 
+    if min_words is None or max_words is None:
+        settings = get_settings()
+        min_words = settings.description_min_words if min_words is None else min_words
+        max_words = settings.description_max_words if max_words is None else max_words
+
     report = ValidationReport()
     for index, goal in enumerate(response.contexts):
-        validate_goal(goal, permitted, report, f"contexts[{index}]")
+        validate_goal(
+            goal, permitted, report, f"contexts[{index}]",
+            min_words=min_words, max_words=max_words,
+        )
     return report
 
 

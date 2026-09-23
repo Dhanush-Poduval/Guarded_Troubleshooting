@@ -63,16 +63,25 @@ def index_catalog(
                 """
                 INSERT INTO deeplink_catalog
                     (deeplink, description, message, qna_description,
-                     original_type, match_text, embedding, source)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                     original_type, match_text, embedding, source,
+                     catalog_id, control_type, validation_deeplink, validation_key,
+                     validation_result_type, validation_condition, validation_value)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (deeplink) DO UPDATE SET
-                    description     = EXCLUDED.description,
-                    message         = EXCLUDED.message,
-                    qna_description = EXCLUDED.qna_description,
-                    original_type   = EXCLUDED.original_type,
-                    match_text      = EXCLUDED.match_text,
-                    embedding       = EXCLUDED.embedding,
-                    source          = EXCLUDED.source
+                    description            = EXCLUDED.description,
+                    message                = EXCLUDED.message,
+                    qna_description        = EXCLUDED.qna_description,
+                    original_type          = EXCLUDED.original_type,
+                    match_text             = EXCLUDED.match_text,
+                    embedding              = EXCLUDED.embedding,
+                    source                 = EXCLUDED.source,
+                    catalog_id             = EXCLUDED.catalog_id,
+                    control_type           = EXCLUDED.control_type,
+                    validation_deeplink    = EXCLUDED.validation_deeplink,
+                    validation_key         = EXCLUDED.validation_key,
+                    validation_result_type = EXCLUDED.validation_result_type,
+                    validation_condition   = EXCLUDED.validation_condition,
+                    validation_value       = EXCLUDED.validation_value
                 """,
                 [
                     (
@@ -84,6 +93,13 @@ def index_catalog(
                         entry.match_text,
                         vector,
                         catalog.source,
+                        entry.catalog_id,
+                        entry.control_type,
+                        entry.validation.deeplink if entry.validation else None,
+                        entry.validation.key if entry.validation else None,
+                        entry.validation.result_type if entry.validation else None,
+                        entry.validation.condition if entry.validation else None,
+                        entry.validation.value if entry.validation else None,
                     )
                     for entry, vector in zip(catalog.entries, vectors)
                 ],
