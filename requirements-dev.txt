@@ -1,0 +1,8 @@
+# Development and test dependencies. Kept separate from requirements.txt so the runtime
+# dependency list stays minimal and the shared file needs fewer edits.
+-r requirements.txt
+
+pytest==9.1.1
+pytest-asyncio==1.4.0
+# ASGI transport for driving the API in-process during tests.
+httpx==0.28.1
