@@ -1,0 +1,166 @@
+# Smart Guided Troubleshooting Engine
+
+Turns unstructured Galaxy device complaints into validated, deeplinked troubleshooting
+plans, served from a semantic cache so that a previously-seen problem is answered without
+re-running the extraction pipeline.
+
+## Pipeline
+
+```
+Raw complaint (+ optional SIIS reference text)
+  |
+  ├─ [0] Query enrichment            ─┐
+  ├─ [1] Structure extraction (LLM)   ├─ Phase 0-2, behind PipelinePort
+  ├─ [2] Deeplink mapping & ordering ─┘
+  |
+  ├─ [3] Fast-path semantic cache     ── this repository
+  └─ [4] REST API service             ── this repository
+```
+
+Phases 3 and 4 are implemented here. Phases 0 to 2 sit behind a single interface,
+`app/pipeline/port.py`, and are currently satisfied by a temporary mock. Swapping in the
+real implementation is one change in `app/bootstrap.py`.
+
+## Request flow
+
+```
+POST /v1/troubleshoot
+  └─ embed query                                     ~6 ms
+     └─ semantic cache lookup (pgvector + HNSW)      ~5 ms
+        ├─ hit  → re-validate → serve                pipeline never runs
+        └─ miss → Phase 0-2 → validate → cache → serve
+```
+
+A cached plan is re-validated before it is served, not only when written: validation rules
+can tighten, and a plan built against a different catalog can hold URIs that no longer
+resolve. Nothing invalid is ever served or stored.
+
+## Setup
+
+Requires Docker and Python 3.12.
+
+```bash
+pip install -r requirements-dev.txt
+cp .env.example .env
+docker compose up -d
+python -m scripts.init_db          # create schema
+python -m scripts.build_catalog    # embed the 578-entry deeplink catalog
+python -m scripts.prewarm_cache    # cache a plan per canonical query
+python -m scripts.run_api          # http://127.0.0.1:8000
+```
+
+`python -m scripts.run_api` is the supported entry point. Running uvicorn directly works
+too, but the loop must be selected explicitly:
+
+```bash
+uvicorn app.api.main:app --loop asyncio
+```
+
+**On Windows this is not optional.** psycopg's async mode cannot run on the default
+Proactor event loop, and the failure surfaces as a pool timeout that looks like a database
+outage rather than a loop mismatch.
+
+## Endpoints
+
+| Method | Path | Purpose |
+| :--- | :--- | :--- |
+| POST | `/v1/troubleshoot` | Process a complaint, return an actionable plan |
+| POST | `/troubleshoot` | Unversioned alias for the above |
+| GET | `/health` | Readiness: 200 only when pool, model, indexes and catalog are live |
+| GET | `/cache/stats` | Measured hit rate, latency percentiles, rejection reasons |
+
+```bash
+curl -X POST http://127.0.0.1:8000/v1/troubleshoot \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "My Galaxy S24 Ultra screen is completely black and will not turn on"}'
+```
+
+`siis_response` is optional and accepts either a raw string or the `{title, content}`
+object the dataset ships.
+
+`/health` is a readiness check rather than a liveness stub: a process that is listening but
+whose HNSW index has not been built serves nothing, so it returns 503 naming the component
+that is not ready.
+
+## Layout
+
+```
+app/api/           FastAPI routes, request/response models, readiness probe
+app/service.py     cache-first request flow
+app/cache/         semantic cache: lookup, write, metrics, stats
+app/retrieval/     hybrid deeplink retrieval (dense + BM25 fused by weighted RRF)
+app/embeddings/    fastembed encoder (ONNX Runtime, no torch)
+app/catalog/       catalog and query-set loading, embedding, indexing
+app/validation/    deterministic contract validation
+app/contract/      the data contract shipped with the dataset
+app/pipeline/      Phase 0-2 port, plus the temporary mock behind it
+db/migrations/     schema, applied in order by scripts.init_db
+data/official/     the participant kit, unmodified
+```
+
+## Key choices
+
+**Embeddings: `BAAI/bge-small-en-v1.5` via fastembed.** 384-dimensional, MIT licensed,
+67 MB, around 3 ms per query on CPU. fastembed runs it on ONNX Runtime rather than
+PyTorch, which matters because each API worker holds its own copy of the model.
+
+**Retrieval: dense vector search fused with BM25 by weighted Reciprocal Rank Fusion.** The
+two fail differently. Dense search bridges vocabulary gaps, matching "blue light filter" to
+Samsung's "Eye Comfort Shield"; BM25 anchors exact terminology. Their scores are on
+incompatible scales, so they are merged by rank rather than by score.
+
+**The cache requires a margin, not just a threshold.** Every query in the dataset concerns
+the screen, so two genuinely different problems can be worded almost identically:
+similarity between distinct problems reaches 0.8742. A threshold alone would pick
+arbitrarily between them, so the best-matching plan must also beat the runner-up plan by a
+configurable margin. A near-tie is treated as a miss and answered by the pipeline, because
+a slow answer is better than a wrong one.
+
+**Every phrasing of a plan is indexed, not just one key.** A reworded query is often closer
+to a stored paraphrase than to the canonical form. Measured on held-out rewordings, one
+moved from 0.6909 against the canonical query, which is a miss, to 0.8200 against a stored
+paraphrase, which is a hit.
+
+**PostgreSQL is the system of record.** Plan JSON, validation state, the catalog and the
+embeddings stay mutually consistent in one transactional store. HNSW is in place for growth
+and concurrency; at the current corpus size PostgreSQL chooses a sequential scan anyway, so
+the fast-path latency comes from skipping the pipeline, not from the index.
+
+## Tests and benchmarks
+
+```bash
+python -m pytest tests/ -q      # requires the database to be up
+python -m scripts.benchmark     # writes metrics.md
+```
+
+Database-backed tests skip rather than fail when PostgreSQL is unreachable, so work on
+other phases is never blocked by a container.
+
+`metrics.md` is generated, never hand-edited. Figures it cannot measure honestly, such as
+step accuracy against reference plans that do not exist yet, are written as "not measured"
+with the reason rather than filled in.
+
+## Configuration
+
+All settings live in `app/config.py` and can be overridden through `.env`; see
+`.env.example`. The ones most worth knowing:
+
+| Variable | Default | Notes |
+| :--- | :--- | :--- |
+| `CACHE_SIMILARITY_THRESHOLD` | 0.78 | Minimum similarity for a cache hit |
+| `CACHE_AMBIGUITY_MARGIN` | 0.05 | Required gap to the runner-up plan |
+| `CACHE_VERSION` | 1 | Bumping it invalidates every cached plan at once |
+| `DESCRIPTION_MAX_WORDS` | 15 | Follows the official sample, which exceeds the prose rule |
+| `HNSW_M`, `HNSW_EF_CONSTRUCTION` | 16, 64 | Index build parameters |
+| `HNSW_EF_SEARCH_CATALOG` | 100 | Higher than the cache: a miss here costs quality |
+
+## Replacing the catalog
+
+Cached plans embed URIs copied from whichever catalog was loaded when they were written, so
+a catalog change requires a purge rather than a migration:
+
+```bash
+python -m scripts.reset_catalog --yes   # dry run without --yes
+python -m scripts.build_catalog
+python -m scripts.prewarm_cache
+```

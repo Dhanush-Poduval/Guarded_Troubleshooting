@@ -315,7 +315,13 @@ async def test_readiness_probe_survives_an_unreachable_database():
 
     settings = get_settings().model_copy(update={"postgres_port": 1})
     pool = create_pool(settings, min_size=0, max_size=1)
-    state = await readiness.probe(pool, settings, encoder_loaded=True)
+    try:
+        state = await readiness.probe(pool, settings, encoder_loaded=True)
+    finally:
+        # The pool must be closed even though it never connected. psycopg_pool runs
+        # background workers that keep retrying a dead host, and leaving them alive was
+        # observed to intermittently stall the end of a test session.
+        await pool.close()
 
     assert state.ok is False
     assert state.database is False
