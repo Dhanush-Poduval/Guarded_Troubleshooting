@@ -65,7 +65,7 @@ def _purge_test_versions(conn) -> None:
         )
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def clean_test_cache_versions(db_connection):
     """Wipe the test cache-version range before and after the session.
 

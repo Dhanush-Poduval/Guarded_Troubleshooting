@@ -44,22 +44,25 @@ def load_catalog_state(settings: Settings) -> tuple[Catalog, BM25Index, frozense
 
 
 def build_pipeline(
-    settings: Settings, encoder: Encoder, bm25: BM25Index
+    settings: Settings,
+    encoder: Encoder,
+    bm25: BM25Index,
 ) -> PipelinePort:
-    """TEMPORARY: returns the mock. Swap this for the real Phase 0-2 pipeline."""
-    from app.pipeline.mock.mock_pipeline import MockPipeline, connection_factory
+    """Build the real Phase 0-2 troubleshooting pipeline."""
 
-    logger.warning(
-        "Using the MOCK Phase 0-2 pipeline. Plans it produces are structural stand-ins, "
-        "not real troubleshooting advice."
+    from app.pipeline.mock.mock_pipeline import connection_factory
+    from app.pipeline.real.pipeline import RealPipeline
+
+    logger.info(
+        "Using real Phase 0-2 troubleshooting pipeline."
     )
-    return MockPipeline(
+
+    return RealPipeline(
         conn_factory=connection_factory(settings),
         encoder=encoder,
         bm25_index=bm25,
         settings=settings,
     )
-
 
 def build_service(
     pool: AsyncConnectionPool,
