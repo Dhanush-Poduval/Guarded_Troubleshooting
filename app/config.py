@@ -105,7 +105,7 @@ class Settings(BaseSettings):
     # upper bound follows the sample instead. Set DESCRIPTION_MAX_WORDS=7 to enforce the
     # written rule literally if an automated grader turns out to apply it.
     description_min_words: int = Field(default=5, ge=1)
-    description_max_words: int = Field(default=15, ge=1)
+    description_max_words: int = Field(default=7, ge=1)
 
     # --- Data sources ---
     catalog_path: str = "data/official/deeplinks.json"
