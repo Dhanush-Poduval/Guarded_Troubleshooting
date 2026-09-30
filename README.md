@@ -699,6 +699,125 @@ The architecture is designed so that expensive processing occurs only when neces
 
 This separation also ensures that AI-generated content does not directly control deeplinks or bypass the response contract. Deeplink candidates originate from the indexed catalog, generated plans are checked against deterministic rules, and only validated responses are returned to the client.
 
+## Getting Started
+
+### Prerequisites
+
+Make sure the following are installed:
+
+- Python 3.12+
+- Docker and Docker Compose
+- Git
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/Dhanush-Poduval/Guarded_Troubleshooting.git
+cd Guarded_Troubleshooting
+```
+
+### 2. Create a Virtual Environment
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+
+pip install -r requirements-dev.txt
+```
+
+### 4. Configure Environment Variables
+
+Create the environment file from the provided example:
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and provide the required configuration values, including the Gemini API key.
+
+### 5. Start PostgreSQL + pgvector
+
+```bash
+docker compose up -d
+```
+
+Verify that the database container is running:
+
+```bash
+docker compose ps
+```
+
+### 6. Initialize the Database
+
+```bash
+python -m scripts.init_db
+```
+
+### 7. Build the Deeplink Catalog
+
+```bash
+python -m scripts.build_catalog
+```
+
+### 8. Start the Application
+
+```bash
+python -m scripts.run_api
+```
+
+The application will start at:
+
+```text
+http://127.0.0.1:8000
+```
+
+The same server provides both the REST API and the web interface, so a separate frontend server is not required.
+
+### 9. Verify System Readiness
+
+In another terminal:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+A ready system should report:
+
+```json
+{
+  "status": "ok",
+  "database": true,
+  "embedding_model": true,
+  "vector_indexes": true,
+  "catalog_indexed": true,
+  "cache_ready": true
+}
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8000/
+```
+
+in your browser to use the troubleshooting interface.
+
+### Optional: Run Tests
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+python -m pytest \
+-p pytest_asyncio.plugin \
+--ignore=tests/cache_live.py \
+-v
+```
+
 ## Submission Resources
 
 - Presentation: [View Presentation](./presentation/Smart_Guided_Troubleshooting_Final_Submission_filled.pptx)
