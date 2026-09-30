@@ -701,5 +701,5 @@ This separation also ensures that AI-generated content does not directly control
 
 ## Submission Resources
 
-- Presentation: ./presentation/Smart_Guided_Troubleshooting_Final_Submission_filled.pptx
-- Demo Video: https://drive.google.com/file/d/1tVMslTQtBKIP-qObZXfjxNKbqdIfXCeE/view?usp=sharing
+- Presentation: [View Presentation](./presentation/Smart_Guided_Troubleshooting_Final_Submission_filled.pptx)
+- Demo Video: [Watch Demo Video](https://drive.google.com/file/d/1tVMslTQtBKIP-qObZXfjxNKbqdIfXCeE/view?usp=sharing)
