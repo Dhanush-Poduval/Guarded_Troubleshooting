@@ -698,3 +698,8 @@ At a high level, Guarded Troubleshooting combines an AI-based troubleshooting pi
 The architecture is designed so that expensive processing occurs only when necessary. Once a validated troubleshooting plan has been generated, semantically similar future requests can reuse it through the vector cache while still passing through deterministic validation before being returned.
 
 This separation also ensures that AI-generated content does not directly control deeplinks or bypass the response contract. Deeplink candidates originate from the indexed catalog, generated plans are checked against deterministic rules, and only validated responses are returned to the client.
+
+## Submission Resources
+
+- Presentation: ./presentation/Smart_Guided_Troubleshooting_Final_Submission_filled.pptx
+- Demo Video: https://drive.google.com/file/d/1tVMslTQtBKIP-qObZXfjxNKbqdIfXCeE/view?usp=sharing
