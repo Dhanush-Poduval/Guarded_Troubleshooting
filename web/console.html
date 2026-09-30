@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Console &middot; Smart Guided Troubleshooting Engine</title>
+<meta name="description" content="Live console: send a Galaxy device complaint and watch it resolve into a validated, deeplinked plan.">
+<link rel="stylesheet" href="theme.css?v=2">
+<link rel="stylesheet" href="console.css?v=2">
+</head>
+<body class="is-console">
+
+<header class="chead">
+  <a class="chead__brand" href="/">
+    <span class="mark mark--lg" aria-hidden="true"></span>
+    <span class="chead__text">
+      <strong>
+        Smart Guided Troubleshooting Engine
+        <span class="chead__badge mono">vague complaint &rarr; validated plan</span>
+      </strong>
+      <small>Semantic routing, deterministic validation and deeplinked device diagnosis</small>
+    </span>
+  </a>
+
+  <div class="chead__right">
+    <a class="pill" id="health" href="/health" target="_blank" rel="noopener">
+      <span class="dot" data-state="unknown"></span><span id="health-text">checking&hellip;</span>
+    </a>
+    <a class="pill" href="/docs" target="_blank" rel="noopener">API docs</a>
+    <a class="pill pill--home" href="/">&larr; Overview</a>
+  </div>
+</header>
+
+<main class="cstage">
+
+  <!-- ---------------------------------------------------------- input side -->
+  <section class="panel cpanel">
+    <div class="panel__head">
+      <div>
+        <span class="eyebrow">Workflow input</span>
+        <h2 class="cpanel__title">Device Support Inspection</h2>
+      </div>
+      <label class="picker">
+        <span class="picker__label">Official complaint</span>
+        <select id="examples" aria-label="Load an official complaint">
+          <option value="">Loading&hellip;</option>
+        </select>
+      </label>
+    </div>
+
+    <form class="ask" id="ask">
+      <div class="field__row">
+        <label class="field__label" for="query">What is wrong with your device?</label>
+        <span class="field__hint">natural speech or verbatim transcript</span>
+      </div>
+      <textarea id="query" rows="3" required
+        placeholder="e.g. My Galaxy S24 Ultra screen is completely black and will not turn on, even though the phone powers on and rings."></textarea>
+
+      <details class="ref" id="ref-wrap">
+        <summary>
+          <span class="ref__lock" aria-hidden="true"></span>
+          Reference text from the knowledge store
+          <span class="ref__state" id="ref-state">none</span>
+        </summary>
+        <p class="ref__note">
+          Plans are derived from this text only. Steps are never invented, so with no
+          reference text the engine answers <code>no_siis_context</code> by design.
+        </p>
+        <textarea id="siis" rows="5" placeholder="Paste the SIIS response for this complaint, or pick an official complaint above."></textarea>
+      </details>
+
+      <div class="ask__actions">
+        <button class="btn btn--primary" id="go" type="submit">
+          <span aria-hidden="true">&#10022;</span> Get a plan
+        </button>
+        <button class="btn" id="again" type="button" disabled
+          title="Send the identical complaint again to show the semantic cache answer">Ask again</button>
+        <button class="btn btn--quiet" id="reset" type="button">Clear</button>
+      </div>
+    </form>
+
+    <div class="planhead" id="planhead" hidden>
+      <span class="eyebrow"><span class="eyebrow__bead" aria-hidden="true"></span> <span id="plan-count">Validated diagnostic plan</span></span>
+      <span class="planhead__target mono" id="plan-target"></span>
+    </div>
+
+    <div class="result" id="result" hidden></div>
+
+    <div class="empty" id="empty">
+      <div class="empty__art" aria-hidden="true"></div>
+      <p><strong>No plan yet.</strong></p>
+      <p>Pick an official complaint, or describe a problem in your own words.</p>
+    </div>
+
+    <div class="working" id="working" hidden>
+      <div class="working__bar"><span></span></div>
+      <p id="working-text">Embedding the complaint&hellip;</p>
+      <small>A first-time complaint runs the full extraction and enrichment pipeline, so it takes a few seconds. A repeat is answered from the semantic cache.</small>
+    </div>
+
+    <div id="screen" hidden></div>
+  </section>
+
+  <!-- -------------------------------------------------------- evidence side -->
+  <section class="panel cpanel cpanel--evidence">
+    <div class="panel__head">
+      <div>
+        <span class="eyebrow">Verification &amp; trace</span>
+        <h2 class="cpanel__title">Evidence &amp; Latency</h2>
+      </div>
+      <span class="panel__hint">every number is measured on this request</span>
+    </div>
+
+    <div class="verdict" id="verdict" data-state="idle">
+      <span class="verdict__tag" id="verdict-tag">Awaiting a request</span>
+      <span class="verdict__why" id="verdict-why">Send a complaint to see how it was answered.</span>
+    </div>
+
+    <div class="latency">
+      <div class="latency__top">
+        <span class="latency__label">Total pipeline response</span>
+        <span class="latency__num"><b id="lat-total">&mdash;</b> <i>ms end-to-end</i></span>
+      </div>
+      <div class="latency__rail" aria-hidden="true"><span id="lat-rail"></span></div>
+      <ul class="bars" id="bars">
+        <li data-k="embed"><span class="bars__led"></span><span class="bars__k">Embed vector calculation</span><span class="bars__v">&mdash;</span></li>
+        <li data-k="lookup"><span class="bars__led"></span><span class="bars__k">Cache index lookup</span><span class="bars__v">&mdash;</span></li>
+        <li data-k="pipeline"><span class="bars__led"></span><span class="bars__k">Extraction &amp; synthesis</span><span class="bars__v">&mdash;</span></li>
+      </ul>
+    </div>
+
+    <dl class="meta" id="meta">
+      <div><dt>Similarity</dt><dd id="m-sim">&mdash;</dd></div>
+      <div><dt>Model</dt><dd id="m-model">&mdash;</dd></div>
+      <div><dt>Cost</dt><dd id="m-cost">&mdash;</dd></div>
+      <div><dt>Cache version</dt><dd id="m-ver">&mdash;</dd></div>
+      <div><dt>Fallback</dt><dd id="m-fallback">&mdash;</dd></div>
+      <div><dt>Request ID</dt><dd id="m-req" class="mono">&mdash;</dd></div>
+    </dl>
+
+    <div class="gate" id="gate" data-state="idle">
+      <span class="gate__icon" aria-hidden="true"></span>
+      <div>
+        <strong id="gate-title">Validation gate</strong>
+        <small id="gate-note">Every plan is re-checked against the catalog before it is served &mdash; on cache reads too, not only on writes.</small>
+      </div>
+    </div>
+
+    <details class="vars" id="vars" hidden>
+      <summary>Phrasings that now reach this plan <span id="vars-count"></span></summary>
+      <ul id="vars-list"></ul>
+    </details>
+
+    <details class="raw">
+      <summary><span class="mono">&lt;/&gt;</span> Raw response payload</summary>
+      <pre id="raw" class="mono">&mdash;</pre>
+    </details>
+  </section>
+
+  <!-- ---------------------------------------------------------- cache strip -->
+  <section class="panel cpanel cpanel--wide">
+    <div class="panel__head">
+      <div>
+        <span class="eyebrow"><span class="eyebrow__bead" aria-hidden="true"></span> Semantic cache &amp; system performance</span>
+        <p class="cpanel__sub">Measured aggregates across everything this instance has served</p>
+      </div>
+      <button class="btn btn--quiet btn--sm" id="refresh-stats" type="button">&#8635; Refresh</button>
+    </div>
+
+    <div class="stats" id="stats">
+      <div class="stat"><span class="stat__k mono">Cached plans</span><span class="stat__v" id="s-plans">&mdash;</span></div>
+      <div class="stat"><span class="stat__k mono">Indexed phrasings</span><span class="stat__v" id="s-vectors">&mdash;</span></div>
+      <div class="stat"><span class="stat__k mono">Hit rate</span><span class="stat__v" id="s-hitrate">&mdash;</span></div>
+      <div class="stat"><span class="stat__k mono">Hit p50</span><span class="stat__v" id="s-hit-p50">&mdash;</span></div>
+      <div class="stat"><span class="stat__k mono">Hit p95</span><span class="stat__v" id="s-hit-p95">&mdash;</span></div>
+      <div class="stat"><span class="stat__k mono">Miss p50</span><span class="stat__v amber" id="s-miss-p50">&mdash;</span></div>
+    </div>
+
+    <p class="rejects">
+      <span class="rejects__label">Requests the cache declined to answer, rather than answering wrongly:</span>
+      <span class="tagr" id="r-threshold">below threshold &mdash;</span>
+      <span class="tagr tagr--amber" id="r-ambiguous">too ambiguous &mdash;</span>
+      <span class="tagr tagr--green" id="r-reval">failed re-validation &mdash;</span>
+    </p>
+  </section>
+
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js?v=2"></script>
+</body>
+</html>

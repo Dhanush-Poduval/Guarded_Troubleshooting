@@ -162,9 +162,49 @@ class TroubleshootingService:
 
         # --- miss path -------------------------------------------------------
         pipeline_started = time.perf_counter()
-        result = await self._pipeline.run(
-            PipelineRequest(query=query, siis_response=siis_response)
-        )
+        try:
+            result = await self._pipeline.run(
+                PipelineRequest(query=query, siis_response=siis_response)
+            )
+        except Exception:
+            # Phase 0-2 calls a language model over the network. Timeouts, malformed
+            # completions and provider errors are expected conditions rather than bugs,
+            # and the specified behaviour for "no plan could be produced" is an empty
+            # contexts list with a fallback reason. Letting the exception escape would
+            # turn a recoverable miss into a failed request.
+            logger.exception(
+                "pipeline failed for %r; serving the no_match fallback", query
+            )
+            pipeline_ms = (time.perf_counter() - pipeline_started) * 1000
+            latency_ms = (time.perf_counter() - started) * 1000
+            outcome = TroubleshootOutcome(
+                request_id=request_id,
+                query=query,
+                query_variations=[],
+                response=ContextDeeplinkResponse(contexts=[]),
+                cache_hit=False,
+                pipeline_invoked=True,
+                similarity=None,
+                latency_ms=latency_ms,
+                embed_ms=embed_ms,
+                lookup_ms=lookup_ms,
+                pipeline_ms=pipeline_ms,
+                cost_usd=0.0,
+                model=None,
+                cache_version=self._settings.cache_version,
+                runner_up_similarity=miss.runner_up_similarity if miss else None,
+                cache_reject_reason=(
+                    miss.reason if miss and miss.reason != "empty" else None
+                ),
+                fallback="no_match",
+                validation_errors=["pipeline raised an exception"],
+            )
+            async with self._pool.connection() as conn:
+                await self._record(
+                    conn, outcome, matched_plan_id=None, validation_passed=False
+                )
+            return outcome
+
         pipeline_ms = (time.perf_counter() - pipeline_started) * 1000
 
         report = validate_plan(result.response, self._permitted)

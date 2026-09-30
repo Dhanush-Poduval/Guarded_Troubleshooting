@@ -1,6 +1,5 @@
 """Tests for Phase 1 grounded structure extraction."""
 
-import json
 
 import pytest
 
@@ -81,9 +80,9 @@ async def test_grounded_structure_extraction(
     monkeypatch.setattr(
         extractor,
         "_call_gemini",
-        lambda system_prompt, user_prompt: json.dumps(
-            fake_response
-        ),
+        # _call_gemini now returns the parsed payload, so that a reply which arrives
+        # intact but does not parse can fall back to the secondary model.
+        lambda system_prompt, user_prompt: fake_response,
     )
 
     result = await extractor.extract(
@@ -191,9 +190,9 @@ async def test_fake_source_text_is_rejected(
     monkeypatch.setattr(
         extractor,
         "_call_gemini",
-        lambda system_prompt, user_prompt: json.dumps(
-            fake_response
-        ),
+        # _call_gemini now returns the parsed payload, so that a reply which arrives
+        # intact but does not parse can fall back to the secondary model.
+        lambda system_prompt, user_prompt: fake_response,
     )
 
     with pytest.raises(

@@ -18,6 +18,7 @@ pytest.importorskip("fastapi")
 import httpx
 
 from app.contract.schema import ContextDeeplinkResponse
+from tests.test_cache import SIIS_TEXT
 
 
 @pytest.fixture(autouse=True)
@@ -134,10 +135,18 @@ async def test_repeat_request_reports_a_cache_hit(client):
     long query barely moves its embedding, so it still matches the pre-warmed plan. That
     is correct behaviour, not a bug. The genuine miss-to-hit transition is covered in
     tests/test_cache.py, where each test gets an isolated cache version.
+
+    Reference text is supplied so the first call caches a plan of its own. Without it the
+    pipeline correctly returns no_siis_context and caches nothing, leaving the second call
+    to match whichever pre-warmed neighbour happens to be nearest. That margin was
+    measured at 0.062 against a 0.05 threshold, so the test would pass or fail according
+    to what else the shared cache happened to hold. Matching its own plan at ~1.0 makes
+    the assertion depend on the behaviour under test instead.
     """
     query = f"My Galaxy Z Flip 7 inner screen shows no image, ref {uuid.uuid4()}"
-    await client.post("/v1/troubleshoot", json={"query": query})
-    second = (await client.post("/v1/troubleshoot", json={"query": query})).json()
+    payload = {"query": query, "siis_response": SIIS_TEXT}
+    await client.post("/v1/troubleshoot", json=payload)
+    second = (await client.post("/v1/troubleshoot", json=payload)).json()
 
     assert second["meta"]["cache_hit"] is True
     assert second["meta"]["pipeline_used"] is False
@@ -149,11 +158,14 @@ async def test_cache_hit_latency_is_within_the_target(client):
     """The stated fast-path budget is 300 ms at P95. Asserted against the budget rather
     than against another measurement, which would be comparing two noisy numbers."""
     query = f"My Galaxy S22 screen inputs are delayed and laggy, case {uuid.uuid4()}"
-    await client.post("/v1/troubleshoot", json={"query": query})
+    # Reference text for the same reason as the test above: the warm-up call has to cache
+    # a plan of its own, or the hits being timed are hits against an incidental neighbour.
+    payload = {"query": query, "siis_response": SIIS_TEXT}
+    await client.post("/v1/troubleshoot", json=payload)
 
     latencies = []
     for _ in range(5):
-        body = (await client.post("/v1/troubleshoot", json={"query": query})).json()
+        body = (await client.post("/v1/troubleshoot", json=payload)).json()
         assert body["meta"]["cache_hit"] is True
         latencies.append(body["meta"]["latency_ms"])
 
@@ -169,7 +181,7 @@ async def test_siis_response_accepts_a_plain_string(client):
     """The written contract shows a raw string."""
     response = await client.post(
         "/v1/troubleshoot",
-        json={"query": "screen flickers", "siis_response": "some reference text"},
+        json={"query": "screen flickers", "siis_response": SIIS_TEXT},
     )
     assert response.status_code == 200
 
@@ -180,7 +192,7 @@ async def test_siis_response_accepts_the_dataset_object(client):
         "/v1/troubleshoot",
         json={
             "query": "screen flickers",
-            "siis_response": {"title": "Screen issue", "content": "Reference steps here"},
+            "siis_response": {"title": "Screen issue", "content": SIIS_TEXT},
         },
     )
     assert response.status_code == 200

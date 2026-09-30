@@ -66,7 +66,21 @@ Do not invent a topic unrelated to the supplied material.
 
 Create a concise sentence-case title describing the core issue.
 
-Keep it between 2 and 10 words.
+The title MUST be 2 or 3 words. Never 4 or more. This is a hard limit:
+a longer title is rejected by validation and the whole plan is discarded.
+
+Sentence case means only the first word is capitalised, except for product
+names such as Smart Switch or Gmail.
+
+Examples of correct titles:
+Battery fast drain
+Screen display damage
+Swipe navigation settings
+Smart Switch failure
+
+Examples that are WRONG because they exceed 3 words:
+Resolve email connection issues
+Troubleshoot blank or black display
 
 
 3. action_name

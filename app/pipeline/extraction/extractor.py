@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import time
@@ -17,6 +18,8 @@ from app.pipeline.extraction.prompts import (
     build_extraction_prompt,
 )
 from app.pipeline.extraction.schema import ExtractedPlan
+
+logger = logging.getLogger(__name__)
 
 
 class StructureExtractionError(RuntimeError):
@@ -101,7 +104,11 @@ class StructureExtractor:
                 "siis_reference cannot be empty"
             )
 
-        raw = await asyncio.to_thread(
+        # Parsing happens inside _call_gemini, per model attempt. A response that is
+        # transport-level fine but carries unparseable JSON is a model failure like any
+        # other, and parsing it out here meant it bypassed both the retry loop and the
+        # configured fallback model.
+        payload = await asyncio.to_thread(
             self._call_gemini,
             STRUCTURE_EXTRACTION_SYSTEM_PROMPT,
             build_extraction_prompt(
@@ -109,8 +116,6 @@ class StructureExtractor:
                 siis_reference,
             ),
         )
-
-        payload = self._parse_json(raw)
 
         try:
             plan = ExtractedPlan.model_validate(
@@ -145,11 +150,12 @@ class StructureExtractor:
         self,
         system_prompt: str,
         user_prompt: str,
-    ) -> str:
+    ) -> dict:
         """
-        Call the configured primary Gemini model.
+        Call the configured primary Gemini model and parse its reply.
 
-        If it fails, try the configured fallback model.
+        If it fails, try the configured fallback model. A reply that arrives intact but
+        does not parse counts as a failure here, so the fallback model gets a turn at it.
         """
 
         models = [
@@ -169,13 +175,20 @@ class StructureExtractor:
 
         for model in models:
             try:
-                return self._call_model(
-                    model=model,
-                    system_prompt=system_prompt,
-                    user_prompt=user_prompt,
+                return self._parse_json(
+                    self._call_model(
+                        model=model,
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                    )
                 )
 
             except StructureExtractionError as exc:
+                logger.warning(
+                    "extraction via %s failed: %s",
+                    model,
+                    exc,
+                )
                 last_error = exc
 
         raise StructureExtractionError(
@@ -387,6 +400,13 @@ class StructureExtractor:
             )
 
         except json.JSONDecodeError as exc:
+            # Without the payload there is nothing to diagnose from: the error names a
+            # character offset in text that is otherwise discarded.
+            logger.warning(
+                "unparseable extraction payload (%s): %.500s",
+                exc,
+                text,
+            )
             raise StructureExtractionError(
                 "Gemini did not return "
                 "valid JSON"
@@ -730,26 +750,42 @@ class StructureExtractor:
         plan: ExtractedPlan,
     ) -> None:
         """
-        Ensure critical/disruptive actions occur only after
-        all non-critical actions.
+        Ensure critical/disruptive actions occur only after all non-critical ones.
+
+        The model reliably produces sound actions but does not reliably order them, and
+        the ordering rule is purely positional. Raising here discarded an otherwise valid
+        plan and surfaced as a failed request, so the ordering is corrected instead.
+
+        The sort is stable, so actions keep their relative order inside each group and the
+        same extraction still yields the same plan.
         """
 
-        seen_critical = False
+        order = {
+            "auto": 0,
+            "manual": 1,
+            "critical": 2,
+        }
 
-        for index, action in enumerate(
-            plan.actions
-        ):
-            if (
-                action.category.value
-                == "critical"
-            ):
-                seen_critical = True
-                continue
+        before = [
+            action.category.value
+            for action in plan.actions
+        ]
 
-            if seen_critical:
-                raise StructureExtractionError(
-                    "Invalid action sequence: "
-                    f"non-critical action at index "
-                    f"{index} follows a "
-                    "critical action"
-                )
+        plan.actions.sort(
+            key=lambda action: order.get(
+                action.category.value,
+                1,
+            )
+        )
+
+        after = [
+            action.category.value
+            for action in plan.actions
+        ]
+
+        if before != after:
+            logger.info(
+                "reordered actions so critical steps come last: %s -> %s",
+                before,
+                after,
+            )

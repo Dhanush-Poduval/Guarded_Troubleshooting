@@ -96,8 +96,29 @@ class Catalog:
         return self.source == "synthetic"
 
     def deeplink_set(self) -> frozenset[str]:
-        """Every URI the system is permitted to emit."""
+        """Every actionable URI the system is permitted to emit."""
         return frozenset(entry.deeplink for entry in self.entries)
+
+    def validation_deeplink_set(self) -> frozenset[str]:
+        """Every validation URI the catalog authorises.
+
+        These are a distinct namespace (bixby://masked/val/...) from the actionable URIs,
+        and only a subset of entries carry one.
+        """
+        return frozenset(
+            entry.validation.deeplink
+            for entry in self.entries
+            if entry.validation and entry.validation.deeplink
+        )
+
+    def permitted_deeplink_set(self) -> frozenset[str]:
+        """Every URI a plan may legitimately reference, of either kind.
+
+        Validation passes one permitted collection, so it must hold both namespaces.
+        Checking a plan against the actionable set alone rejects any valid
+        validationDeeplink, which is what happened to the official sample_output.json.
+        """
+        return self.deeplink_set() | self.validation_deeplink_set()
 
 
 def _parse_validation(raw: dict | None) -> CatalogValidation | None:

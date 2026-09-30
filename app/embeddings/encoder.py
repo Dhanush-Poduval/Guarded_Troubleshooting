@@ -36,7 +36,14 @@ class Encoder:
         from fastembed import TextEmbedding
 
         self._settings = settings or get_settings()
-        self._model = TextEmbedding(self._settings.embedding_model)
+        # See Settings.embedding_threads: unbounded intra-op threads oversubscribe the
+        # cores the rest of the service is already using.
+        threads = self._settings.embedding_threads
+        self._model = (
+            TextEmbedding(self._settings.embedding_model, threads=threads)
+            if threads
+            else TextEmbedding(self._settings.embedding_model)
+        )
         self._dim = self._settings.embedding_dim
 
     @property

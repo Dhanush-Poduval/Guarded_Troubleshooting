@@ -17,9 +17,11 @@ Raw complaint (+ optional SIIS reference text)
   └─ [4] REST API service             ── this repository
 ```
 
-Phases 3 and 4 are implemented here. Phases 0 to 2 sit behind a single interface,
-`app/pipeline/port.py`, and are currently satisfied by a temporary mock. Swapping in the
-real implementation is one change in `app/bootstrap.py`.
+All five phases are implemented. Phases 0 to 2 sit behind a single interface,
+`app/pipeline/port.py`, and are satisfied by `app/pipeline/real/pipeline.py`, which calls
+Gemini for query enrichment and structure extraction and resolves deeplinks through the
+hybrid retrieval layer. The mock that stood in during development is retained in
+`app/pipeline/mock/` for offline testing.
 
 ## Request flow
 
@@ -37,17 +39,23 @@ resolve. Nothing invalid is ever served or stored.
 
 ## Setup
 
-Requires Docker and Python 3.12.
+Requires Docker, Python 3.12, and a Gemini API key for the Phase 0-2 pipeline.
 
 ```bash
 pip install -r requirements-dev.txt
 cp .env.example .env
+# Set GEMINI_API_KEY in .env before continuing: Phase 0-2 calls Gemini and the
+# service will not start without it. Key from https://aistudio.google.com/apikey
 docker compose up -d
 python -m scripts.init_db          # create schema
 python -m scripts.build_catalog    # embed the 578-entry deeplink catalog
 python -m scripts.prewarm_cache    # cache a plan per canonical query
 python -m scripts.run_api          # http://127.0.0.1:8000
 ```
+
+That one process serves both the API and the web client, so there is nothing else to
+start: open <http://127.0.0.1:8000> for the UI and
+<http://127.0.0.1:8000/docs> for the API.
 
 `python -m scripts.run_api` is the supported entry point. Running uvicorn directly works
 too, but the loop must be selected explicitly:
@@ -68,6 +76,8 @@ outage rather than a loop mismatch.
 | POST | `/troubleshoot` | Unversioned alias for the above |
 | GET | `/health` | Readiness: 200 only when pool, model, indexes and catalog are live |
 | GET | `/cache/stats` | Measured hit rate, latency percentiles, rejection reasons |
+| GET | `/v1/examples` | The official complaints and their SIIS text, for the web client |
+| GET | `/` | The web client (served from `web/`, omitted if the directory is absent) |
 
 ```bash
 curl -X POST http://127.0.0.1:8000/v1/troubleshoot \
@@ -81,6 +91,42 @@ object the dataset ships.
 `/health` is a readiness check rather than a liveness stub: a process that is listening but
 whose HNSW index has not been built serves nothing, so it returns 503 naming the component
 that is not ready.
+
+## Web client
+
+`web/` holds a two-page client that the API mounts at `/`. There is no build step, no
+package manifest and no CDN dependency: plain HTML, CSS and JavaScript served by the same
+uvicorn process, so the whole system is one command and works with no network access.
+
+`/` is an overview of what the engine does and how it is built, ending in the measured
+results including the two targets that are missed. Its cache figures are read live from
+`/cache/stats` on the running instance rather than written into the page. The sample
+request is fired only when the visitor asks for it, because a complaint the cache cannot
+answer runs the full pipeline and costs a paid model call.
+
+`/console.html` is the working client. A complaint goes in, and the plan comes back
+rendered as goals, numbered actions carrying their `auto` / `manual` / `critical` category,
+and step groups whose deeplinks appear as buttons. A `bixby://` URI does not resolve in a
+desktop browser, so clicking a deeplink copies it and states what it would do on-device
+rather than pretending to navigate.
+
+Beside it sits the evidence panel, and every value in it comes from the `meta` block of the
+response rather than being computed in the browser: cache hit or miss with the cosine
+similarity that decided it, the end-to-end latency split into embed, cache lookup and
+pipeline, the model actually called, the cost, and the fallback reason when there is one.
+
+Two details are there for the sake of an honest demo. **Ask again** re-sends the identical
+complaint, which turns the previous miss into a cache hit and shows the latency collapse
+directly. The reference-text panel can be emptied, which makes the engine answer
+`no_siis_context` with no plan -- the specified behaviour, since steps are only ever derived
+from supplied text and never invented.
+
+Pick a complaint from the dropdown to load a real record from the participant kit; the
+list is served by `/v1/examples` so the client never carries its own copy of the dataset.
+
+Stylesheet and script links carry a `?v=` suffix. Without it a browser that has cached an
+earlier deployment keeps serving the old asset after an update, which is how a stale
+stylesheet silently hid a fixed layout bug during development.
 
 ## Layout
 
@@ -96,6 +142,7 @@ app/contract/      the data contract shipped with the dataset
 app/pipeline/      Phase 0-2 port, plus the temporary mock behind it
 db/migrations/     schema, applied in order by scripts.init_db
 data/official/     the participant kit, unmodified
+web/               the demo client, served by the same process as the API
 ```
 
 ## Key choices
@@ -153,6 +200,7 @@ All settings live in `app/config.py` and can be overridden through `.env`; see
 | `DESCRIPTION_MAX_WORDS` | 15 | Follows the official sample, which exceeds the prose rule |
 | `HNSW_M`, `HNSW_EF_CONSTRUCTION` | 16, 64 | Index build parameters |
 | `HNSW_EF_SEARCH_CATALOG` | 100 | Higher than the cache: a miss here costs quality |
+| `GEMINI_API_KEY` | _(required)_ | Phase 0-2 enrichment and extraction |
 
 ## Replacing the catalog
 

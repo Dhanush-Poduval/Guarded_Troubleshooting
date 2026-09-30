@@ -14,16 +14,21 @@ retrieval, caching or validation logic of their own.
 
 from __future__ import annotations
 
+import functools
 import logging
+import pathlib
 from contextlib import asynccontextmanager
 
 import anyio
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api import readiness
 from app.api.schemas import (
     CacheStatsResponse,
+    ExampleQuery,
+    ExamplesResponse,
     HealthResponse,
     ResponseMeta,
     TroubleshootRequest,
@@ -31,6 +36,7 @@ from app.api.schemas import (
 )
 from app.bootstrap import build_pool, build_service
 from app.cache.store import cache_stats
+from app.catalog.queries import load_queries
 from app.config import Settings, get_settings
 from app.db.pool import pool_stats
 from app.service import TroubleshootingService
@@ -193,3 +199,48 @@ async def cache_statistics(request: Request) -> CacheStatsResponse:
         stats = await cache_stats(conn, settings)
     stats["pool"] = pool_stats(pool)
     return CacheStatsResponse(**stats)
+
+
+@functools.lru_cache(maxsize=1)
+def _examples() -> ExamplesResponse:
+    """The official query set, read once.
+
+    Reading it per request would be wasted work on a file that cannot change while the
+    process runs, and a failure here must not take the API down: the demo UI degrades to
+    a blank example list, which is cosmetic, while /v1/troubleshoot is unaffected.
+    """
+    try:
+        records = load_queries(settings=get_settings())
+    except Exception:  # noqa: BLE001 - an unreadable query set is not an API outage
+        logger.exception("could not load the example query set")
+        return ExamplesResponse(count=0, examples=[])
+
+    examples = [
+        ExampleQuery(
+            id=record.id,
+            query=record.query,
+            siis_title=record.siis.title if record.siis else "",
+            siis_response=record.siis.as_text() if record.siis else "",
+        )
+        for record in records
+        if record.query
+    ]
+    return ExamplesResponse(count=len(examples), examples=examples)
+
+
+@app.get("/v1/examples", response_model=ExamplesResponse)
+def examples() -> ExamplesResponse:
+    """The official complaints and their SIIS reference text, for the demo client."""
+    return _examples()
+
+
+# The web client is mounted last and on purpose. A Starlette mount at "/" matches any path
+# that no earlier route claimed, so registering it before the handlers above would shadow
+# them. The API keeps working when the directory is absent, which is why this is guarded
+# rather than assumed.
+WEB_DIR = pathlib.Path(__file__).resolve().parents[2] / "web"
+
+if WEB_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
+else:
+    logger.warning("web client directory not found at %s; serving the API only", WEB_DIR)

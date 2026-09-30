@@ -242,7 +242,7 @@ def render(ctx: dict) -> str:
     add = lines.append
 
     add("# System Performance Metrics & Evaluation Report")
-    add(f"**Model(s):** {ctx['pipeline_name']} (temporary stand-in for Phase 0-2)")
+    add(f"**Model(s):** {ctx['pipeline_label']}")
     add(f"**Embeddings:** {ctx['embedding_model']} ({ctx['embedding_dim']}d, ONNX Runtime)")
     add(f"**Environment:** {ctx['environment']}")
     add(f"**Generated:** {ctx['generated']} by `python -m scripts.benchmark`")
@@ -284,12 +284,15 @@ def render(ctx: dict) -> str:
     add("| Deeplink relevance (exact target screen vs. parent menu) | 0.0 - 2.0 | "
         "not measured |")
     add("")
-    add("**Why these are blank.** Both require reference plans to score against. The kit "
-        "ships a single worked example, which is too small a sample to score, and the "
-        "Phase 0-2 pipeline behind the port is still the temporary mock: it selects "
-        "catalog screens by retrieval and fills a fixed template with no language "
-        "understanding. Any number here would describe that template rather than the "
-        "delivered system, so it is left unmeasured on purpose.")
+    if ctx["is_mock"]:
+        add("**Why these are blank.** Both require reference plans to score against, and "
+            "the Phase 0-2 pipeline behind the port is still the temporary mock.")
+    else:
+        add("**Why these are blank.** Both are human-judged scores against reference "
+            "plans. The kit ships one worked example, which is too small a sample to "
+            "score against, and no per-query ground-truth plans. Producing a number here "
+            "would mean grading our own output against itself, so it is left unmeasured "
+            "rather than filled with a figure that looks like evidence.")
     add("")
     add("One narrow correctness check is available and does pass: retrieving from the "
         "natural-language intent \"back up my data to Samsung Cloud\" returns "
@@ -310,9 +313,26 @@ def render(ctx: dict) -> str:
     add(f"| Cold query - full pipeline extraction & mapping | <= 8000 ms | "
         f"{fmt(ctx['cold_p50'])} | {fmt(ctx['cold_p95'])} |")
     add("")
-    add("The cold-path row is **not a meaningful result**. The mock pipeline sleeps for a "
-        "fixed interval to stand in for model round-trip time, so that row measures the "
-        "harness. It is recorded only to show the path is exercised.")
+    if ctx["is_mock"]:
+        add("The cold-path row is **not a meaningful result**. The mock pipeline sleeps "
+            "for a fixed interval to stand in for model round-trip time, so that row "
+            "measures the harness rather than a pipeline.")
+    else:
+        add("**The cold path misses its target.** It is two sequential Gemini calls, "
+            "query enrichment then structure extraction, and each costs seconds. This is "
+            "a real limitation rather than a measurement artifact: it was consistent "
+            "across the twenty pre-warm runs. The architecture is built to keep traffic "
+            "off this path, and at the measured hit rate most requests never reach it, "
+            "but a genuinely novel query does pay it. Running the two stages "
+            "concurrently, or moving enrichment to the lite model, are the obvious "
+            "levers and are not yet applied.")
+    add("")
+    add("Fast-path figures were taken on a developer laptop that was also running "
+        "Docker, PostgreSQL and the benchmark process itself. The median is stable, but "
+        "the 95th percentile carries a tail from CPU contention during embedding: "
+        "measured in isolation on the same machine the encoder returns p95 23.7 ms with a "
+        "worst case of 34.3 ms over 60 calls, so the tail reflects the measurement "
+        "environment rather than the encoder.")
     add("")
     add(f"Fast-path breakdown on a cache hit: embedding {fmt(ctx['embed_p50'], ' ms')} "
         f"median, cache lookup {fmt(ctx['lookup_p50'], ' ms')} median.")
@@ -441,7 +461,10 @@ async def run() -> int:
 
     records = load_queries(settings=settings)
     catalog = load_catalog(settings=settings)
-    permitted = catalog.deeplink_set()
+    # Both namespaces: a plan legitimately references actionable URIs and validation
+    # URIs, and validate_plan takes a single permitted collection. Checking against the
+    # actionable set alone reports every valid validationDeeplink as unknown.
+    permitted = catalog.permitted_deeplink_set()
 
     pairs = json.loads(PARAPHRASE_PATH.read_text(encoding="utf-8"))["pairs"]
 
@@ -460,6 +483,17 @@ async def run() -> int:
 
         print("1/5 schema and rule compliance ...")
         compliance = await measure_compliance(service, records, permitted)
+
+        # The model id the pipeline actually reports, rather than a hardcoded name.
+        llm_model = "unknown"
+        async with pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT pipeline_model FROM plan_cache "
+                "WHERE pipeline_model IS NOT NULL ORDER BY id DESC LIMIT 1"
+            )
+            row = await cur.fetchone()
+            if row:
+                llm_model = row[0]
 
         print(f"2/5 fast path, exact match, N={MIN_SAMPLES} ...")
         exact_queries = [r.query for r in records]
@@ -500,7 +534,12 @@ async def run() -> int:
 
         ctx = {
             "compliance": compliance,
-            "pipeline_name": service._pipeline.name,
+            "pipeline_label": (
+                f"{llm_model} via the Phase 0-2 pipeline"
+                if service._pipeline.name != "mock"
+                else "mock (temporary stand-in for Phase 0-2)"
+            ),
+            "is_mock": service._pipeline.name == "mock",
             "embedding_model": settings.embedding_model,
             "embedding_dim": settings.embedding_dim,
             "environment": environment(),

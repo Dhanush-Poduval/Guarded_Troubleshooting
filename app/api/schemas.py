@@ -115,3 +115,22 @@ class CacheStatsResponse(BaseModel):
     rejected_ambiguous: int = 0
     rejected_failed_revalidation: int = 0
     pool: dict[str, Any] | None = None
+
+
+class ExampleQuery(BaseModel):
+    """One record from the official query set, shaped for the demo UI.
+
+    The UI needs the reference text as well as the complaint, because a plan is derived
+    from that text rather than from model memory. Serving the dataset from here keeps the
+    web client from carrying a second copy that would drift.
+    """
+
+    id: str
+    query: str
+    siis_title: str = ""
+    siis_response: str = ""
+
+
+class ExamplesResponse(BaseModel):
+    count: int
+    examples: list[ExampleQuery] = Field(default_factory=list)

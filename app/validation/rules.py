@@ -191,7 +191,17 @@ def is_title_case(
 def is_sentence_case(
     text: str,
 ) -> bool:
-    """Sentence case without rejecting product names."""
+    """Sentence case, without rejecting embedded product names.
+
+    Titles legitimately contain proper nouns: "Smart Switch failure" and "Gmail blank
+    screen" are sentence case even though a word other than the first is capitalised. A
+    rule that demands every later word be lowercase rejects them.
+
+    Testing only the first character is the opposite failure: it accepts "Battery Fast
+    Drain", which is Title Case, and the rule then catches nothing. So the test is that
+    the first word is capitalised and the title is not entirely capitalised, which
+    separates a sentence containing a product name from a Title Cased string.
+    """
 
     tokens = words(
         text
@@ -200,7 +210,26 @@ def is_sentence_case(
     if not tokens:
         return False
 
-    return tokens[0][0].isupper()
+    if not tokens[0][0].isupper():
+        return False
+
+    if len(tokens) == 1:
+        return True
+
+    # Acronyms may be fully upper (QHD, HD); they do not make a title Title Case.
+    considered = [
+        token
+        for token in tokens[1:]
+        if not token.isupper()
+    ]
+
+    if not considered:
+        return True
+
+    return any(
+        token[0].islower()
+        for token in considered
+    )
 
 
 def _check_strings_for_urls(
@@ -442,16 +471,19 @@ def validate_goal(
         goal.title
     )
 
-    # PDF requirement: 2-10 words.
+    # The specification states 2 to 3 words, and the official sample_output.json title
+    # ("Screen display damage") is 3. An earlier edit widened this to 2-10 citing the
+    # specification, which does not say that; the wider bound reports compliance the
+    # evaluation would not credit.
     if not (
         2
         <= len(title_words)
-        <= 10
+        <= 3
     ):
         report.add(
             "title_length",
             (
-                "title must be 2 to 10 words, "
+                "title must be 2 to 3 words, "
                 f"got {len(title_words)}"
             ),
             f"{path}.title",
@@ -583,6 +615,49 @@ def validate_plan(
             f"contexts[{index}]",
             min_words=min_words,
             max_words=max_words,
+        )
+
+    return report
+
+
+def validate_query_variations(
+    variations: list[str],
+) -> ValidationReport:
+    """Check the paraphrase set the pipeline produces for a query.
+
+    The specification requires 8 to 10 distinct paraphrases per query. They are not
+    decoration: each one becomes a searchable phrasing of the cached plan, so a set that
+    is too small narrows what the semantic cache can match, and duplicates inflate the
+    count without adding reach.
+
+    Restored after being dropped in the Phase 0-2 merge; without it this rule was not
+    enforced anywhere, and `scripts/benchmark.py` could not import.
+    """
+    report = ValidationReport()
+
+    if not 8 <= len(variations) <= 10:
+        report.add(
+            "variation_count",
+            f"expected 8 to 10 query variations, got {len(variations)}",
+            "query_variations",
+        )
+
+    seen = {
+        variation.strip().lower()
+        for variation in variations
+    }
+    if len(seen) != len(variations):
+        report.add(
+            "variation_duplicates",
+            "query variations must be distinct",
+            "query_variations",
+        )
+
+    for index, variation in enumerate(variations):
+        _check_strings_for_urls(
+            report,
+            variation,
+            f"query_variations[{index}]",
         )
 
     return report
