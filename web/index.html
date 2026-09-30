@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Guided Troubleshooting Engine</title>
+<meta name="description" content="Turns vague Galaxy device complaints into validated, deeplinked troubleshooting plans, answered from a semantic cache in milliseconds.">
+<link rel="stylesheet" href="theme.css?v=1">
+<link rel="stylesheet" href="landing.css?v=1">
+</head>
+<body>
+
+<!-- =============================================================== nav -->
+<header class="nav">
+  <a class="nav__brand" href="/">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="nav__brandtext">
+      <strong>Smart Guided</strong>
+      <small>TROUBLESHOOTING ENGINE</small>
+    </span>
+  </a>
+
+  <nav class="nav__links" aria-label="Sections">
+    <a href="#architecture">Architecture</a>
+    <a href="#cache">Semantic Cache</a>
+    <a href="#benchmarks">Benchmarks</a>
+    <a href="#integrate">Integrate</a>
+    <a href="/docs" target="_blank" rel="noopener">API Docs</a>
+  </nav>
+
+  <div class="nav__actions">
+    <a class="pill" id="nav-health" href="/health" target="_blank" rel="noopener">
+      <span class="dot" data-state="unknown"></span><span id="nav-health-text">checking</span>
+    </a>
+    <a class="btn btn--primary btn--sm" href="/console.html">Open Console</a>
+  </div>
+</header>
+
+<main>
+
+<!-- ============================================================== hero -->
+<section class="hero">
+  <div class="hero__glow" aria-hidden="true"></div>
+
+  <a class="announce" href="#cache">
+    <span class="announce__tag">Theme 2</span>
+    <span>Semantic cache with an ambiguity margin &mdash; declines a near-tie instead of guessing</span>
+    <span class="announce__arrow" aria-hidden="true">&rarr;</span>
+  </a>
+
+  <h1 class="hero__title">
+    From Vague Complaints to<br>
+    Validated Diagnostic Plans in<br>
+    <span class="grad">Milliseconds.</span>
+  </h1>
+
+  <p class="hero__sub">
+    A retrieval and validation engine that reads an unstructured Galaxy device complaint,
+    derives steps only from the supplied knowledge-store text, resolves every action to a
+    real deeplink in the official catalog, and re-checks the whole plan before serving it.
+  </p>
+
+  <div class="hero__cta">
+    <a class="btn btn--primary" href="/console.html">
+      <span aria-hidden="true">&#9654;</span> Try the live console
+    </a>
+    <a class="btn" href="/docs" target="_blank" rel="noopener">View API &amp; schema</a>
+  </div>
+
+  <div class="hero__run">
+    <code class="mono">$ python -m scripts.run_api</code>
+    <button class="copybtn" type="button" data-copy="python -m scripts.run_api" title="Copy">copy</button>
+  </div>
+
+  <!-- honest substitute for a logo wall: what the system is actually built on -->
+  <p class="trust__label">BUILT ON THE OFFICIAL SAMSUNG PRISM PARTICIPANT KIT</p>
+  <ul class="trust">
+    <li><strong>578</strong> catalog deeplinks</li>
+    <li><strong>20</strong> official complaints</li>
+    <li><strong>384</strong>-dim embeddings</li>
+    <li><strong>136</strong> automated tests</li>
+  </ul>
+</section>
+
+<!-- ====================================================== console preview -->
+<section class="preview" id="architecture">
+  <div class="term">
+    <div class="term__bar">
+      <span class="term__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="term__path mono">engine-session://live-triage-stream</span>
+      <span class="term__live" id="prev-state"><span class="dot" data-state="unknown"></span> <span id="prev-state-text">connecting</span></span>
+      <button class="copybtn" type="button" id="prev-run" title="Send one real request to this instance">run sample</button>
+    </div>
+
+    <div class="term__body">
+      <div class="term__left">
+        <p class="term__k mono">NATURAL LANGUAGE COMPLAINT</p>
+        <p class="term__quote" id="prev-query">
+          &ldquo;My Galaxy S24 Ultra screen is completely black and will not turn on, even
+          though the phone powers on and rings when someone calls.&rdquo;
+        </p>
+
+        <p class="term__k mono">DERIVED PLAN</p>
+        <div id="prev-plan" class="prevplan">
+          <div class="prevplan__row">
+            <span class="prevplan__num">1</span>
+            <span class="prevplan__name">Physical Inspection</span>
+            <span class="chip chip--manual">manual</span>
+          </div>
+          <div class="prevplan__row">
+            <span class="prevplan__num">2</span>
+            <span class="prevplan__name">Charge Device</span>
+            <span class="chip chip--manual">manual</span>
+          </div>
+          <div class="prevplan__row">
+            <span class="prevplan__num">3</span>
+            <span class="prevplan__name">Force Restart</span>
+            <span class="chip chip--critical">critical</span>
+          </div>
+        </div>
+        <p class="term__note">
+          Disruptive actions are forced last, so a plan never opens with a factory reset.
+        </p>
+      </div>
+
+      <div class="term__right">
+        <p class="term__k mono">LATENCY BREAKDOWN <span class="term__total" id="prev-total">run a sample</span></p>
+        <ul class="tbars" id="prev-bars">
+          <li><span class="tbars__k mono">1. Vector embedding</span><span class="tbars__track"><i style="background:var(--cyan)"></i></span><span class="tbars__v mono">&mdash;</span></li>
+          <li><span class="tbars__k mono">2. Cache lookup</span><span class="tbars__track"><i style="background:var(--violet)"></i></span><span class="tbars__v mono">&mdash;</span></li>
+          <li><span class="tbars__k mono">3. Catalog validation</span><span class="tbars__track"><i style="background:var(--green)"></i></span><span class="tbars__v mono">&mdash;</span></li>
+        </ul>
+
+        <div class="tgrid">
+          <div><span class="tgrid__k mono">SIMILARITY</span><span class="tgrid__v" id="prev-sim">&mdash;</span></div>
+          <div><span class="tgrid__k mono">VALIDATION</span><span class="tgrid__v" id="prev-valid">&mdash;</span></div>
+        </div>
+
+        <p class="term__k mono">GUARDRAIL</p>
+        <p class="term__note">
+          Every URI is matched against the 578-entry catalog. A plan that fails
+          re-validation is discarded rather than served &mdash; on cache reads as well as
+          on writes.
+        </p>
+      </div>
+    </div>
+
+    <div class="term__foot" id="live-strip">
+      <div><span class="ls__v" id="ls-plans">&mdash;</span><span class="ls__k">cached plans</span></div>
+      <div><span class="ls__v" id="ls-vectors">&mdash;</span><span class="ls__k">indexed phrasings</span></div>
+      <div><span class="ls__v" id="ls-hitrate">&mdash;</span><span class="ls__k">cache hit rate</span></div>
+      <div><span class="ls__v" id="ls-p50">&mdash;</span><span class="ls__k">hit latency p50</span></div>
+    </div>
+  </div>
+  <p class="preview__cap">
+    The strip above is read live from <code class="mono">GET /cache/stats</code> on this
+    running instance. It reflects whatever this machine has actually served, including
+    anything you send from the console.
+  </p>
+</section>
+
+<!-- ========================================================== features -->
+<section class="sec" id="cache">
+  <div class="sec__head">
+    <span class="eyebrow">&#9670; Engine architecture</span>
+    <div class="sec__split">
+      <h2>Built so a wrong answer costs more than a slow one.</h2>
+      <p>
+        A cache that answers confidently but incorrectly is worse than no cache. Each
+        layer below exists to make an unsafe answer harder to produce than an honest
+        refusal.
+      </p>
+    </div>
+  </div>
+
+  <div class="cards">
+    <article class="card">
+      <span class="card__icon" data-i="vector"></span>
+      <h3>Semantic cache, not key lookup</h3>
+      <p>
+        Every phrasing of a complaint is embedded and indexed separately &mdash; canonical
+        form, original wording and each paraphrase &mdash; so a rewording matches a stored
+        paraphrase rather than missing a single canonical key.
+      </p>
+      <span class="card__foot mono">384-dim &middot; HNSW cosine &middot; m=16</span>
+    </article>
+
+    <article class="card">
+      <span class="card__icon" data-i="gate"></span>
+      <h3>Deterministic validation gate</h3>
+      <p>
+        Schema, wording rules and every deeplink URI are checked against the catalog
+        before a plan is served. Cached plans are re-checked on read, because rules tighten
+        and catalogs change after a plan is written.
+      </p>
+      <span class="card__foot mono">0 free-text URLs permitted</span>
+    </article>
+
+    <article class="card">
+      <span class="card__icon" data-i="margin"></span>
+      <h3>Ambiguity margin</h3>
+      <p>
+        Similarity alone cannot separate a reworded complaint from a different complaint
+        phrased similarly. The best plan must also beat the runner-up by a margin, or the
+        request is treated as a miss.
+      </p>
+      <span class="card__foot mono">threshold 0.78 &middot; margin 0.05</span>
+    </article>
+
+    <article class="card">
+      <span class="card__icon" data-i="ground"></span>
+      <h3>Grounded in supplied text</h3>
+      <p>
+        Steps are derived only from the knowledge-store text attached to the request.
+        With no reference text the engine answers <code>no_siis_context</code> and returns
+        no plan, rather than inventing one from model memory.
+      </p>
+      <span class="card__foot mono">never invents a step</span>
+    </article>
+  </div>
+</section>
+
+<!-- ========================================================= benchmarks -->
+<section class="sec" id="benchmarks">
+  <div class="sec__head">
+    <span class="eyebrow">&#9670; Measured, not asserted</span>
+    <div class="sec__split">
+      <h2>What the retriever actually contributes.</h2>
+      <p>
+        Run over all 20 official complaints. Agreement means how often a variant picks the
+        same catalog screen as the shipped hybrid &mdash; it shows each retriever's
+        contribution without claiming which screen is correct.
+      </p>
+    </div>
+  </div>
+
+  <div class="tablewrap">
+    <table class="dtable">
+      <thead>
+        <tr>
+          <th>Retrieval variant</th>
+          <th>P50 / P95 (ms)</th>
+          <th>Resolved</th>
+          <th>Agreement</th>
+          <th>Observation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="is-shipped">
+          <td><strong>Hybrid BM25 + dense</strong> <span class="tag tag--ship">shipped</span></td>
+          <td class="mono">60.3 / 413.3</td>
+          <td class="mono">20/20</td>
+          <td class="mono num-ok">100%</td>
+          <td>Weighted RRF, dense 1.0 and sparse 0.8.</td>
+        </tr>
+        <tr>
+          <td>Dense embedding only</td>
+          <td class="mono">368.9 / 467.5</td>
+          <td class="mono">20/20</td>
+          <td class="mono num-warn">30%</td>
+          <td>Bridges vocabulary gaps, but drifts to topically near screens.</td>
+        </tr>
+        <tr>
+          <td>BM25 keyword only</td>
+          <td class="mono">380.0 / 470.7</td>
+          <td class="mono">20/20</td>
+          <td class="mono num-warn">25%</td>
+          <td>Exact terminology only. Misses any differently worded screen.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="sub">Contract compliance, over the 20 official complaints</h3>
+  <div class="tablewrap">
+    <table class="dtable">
+      <thead>
+        <tr><th>Metric</th><th>Target</th><th>Measured</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Schema-valid output</td><td class="mono">&ge; 99%</td><td class="mono num-ok">100%</td><td><span class="tag tag--ok">pass</span></td></tr>
+        <tr><td>Rule compliance (goal / title / description)</td><td class="mono">&ge; 95%</td><td class="mono num-ok">100%</td><td><span class="tag tag--ok">pass</span></td></tr>
+        <tr><td>Absolute URL leaks</td><td class="mono">0</td><td class="mono num-ok">0</td><td><span class="tag tag--ok">pass</span></td></tr>
+        <tr><td>Deeplink catalog validity (exact URI match)</td><td class="mono">100%</td><td class="mono num-ok">100%</td><td><span class="tag tag--ok">pass</span></td></tr>
+        <tr><td>Semantic cache hit rate on unseen rewordings</td><td class="mono">&ge; 80%</td><td class="mono num-ok">90%</td><td><span class="tag tag--ok">pass</span></td></tr>
+        <tr><td>Auto actions carrying a valid actionable deeplink</td><td class="mono">&ge; 90%</td><td class="mono num-bad">62.5%</td><td><span class="tag tag--bad">below target</span></td></tr>
+        <tr><td>Cold path, full pipeline</td><td class="mono">&le; 8 s</td><td class="mono num-bad">10.2 s</td><td><span class="tag tag--bad">below target</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <span class="callout__icon" aria-hidden="true"></span>
+    <div>
+      <strong>Two targets are missed, and they are printed here on purpose.</strong>
+      <p>
+        The cold path is two sequential model calls and costs seconds; the architecture is
+        built to keep traffic off it, but a genuinely novel complaint still pays it.
+        Deeplink coverage is limited by the catalog: only 138 of 578 entries carry a
+        complete validation block, so a validation deeplink is emitted only where the
+        catalog supports one rather than being invented. Step-accuracy and
+        deeplink-relevance scores are left blank in the report because they are
+        human-judged against reference plans the kit does not ship.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================== integrate -->
+<section class="sec sec--split" id="integrate">
+  <div>
+    <span class="eyebrow">&#9670; Zero-config integration</span>
+    <h2 class="h2--tight">One POST. One validated plan.</h2>
+    <p class="lead">
+      The service is a single FastAPI process. It owns the embedding model, the connection
+      pool, the HNSW indexes and the validation gate, so a caller sends a complaint and its
+      reference text and receives a plan that has already been checked.
+    </p>
+    <ul class="ticks">
+      <li><strong>Strict schema on the way out.</strong> The response validates against the contract shipped with the dataset, including the camelCase field names.</li>
+      <li><strong>Reference text in either shape.</strong> A raw string or the <code>{title, content}</code> object the dataset uses; both are normalised.</li>
+      <li><strong>Operational metadata attached.</strong> Cache hit, similarity, per-stage latency, model and fallback reason travel with every response.</li>
+    </ul>
+    <a class="btn" href="/docs" target="_blank" rel="noopener">Full OpenAPI reference &rarr;</a>
+  </div>
+
+  <div class="codecard">
+    <div class="codecard__bar">
+      <span class="term__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="mono">troubleshoot.sh</span>
+      <button class="copybtn" type="button" id="copy-code" title="Copy">copy</button>
+    </div>
+<pre class="codecard__body mono"><code><span class="c-cm"># 1. One process serves the API and this site.</span>
+python -m scripts.run_api
+
+<span class="c-cm"># 2. Send a complaint plus its knowledge-store text.</span>
+curl -X POST http://127.0.0.1:8000<span class="c-st">/v1/troubleshoot</span> \
+  -H <span class="c-st">'Content-Type: application/json'</span> \
+  -d <span class="c-st">'{
+    "query": "My Galaxy S24 Ultra screen is completely black",
+    "siis_response": { "title": "...", "content": "..." }
+  }'</span>
+
+<span class="c-cm"># 3. Plan comes back validated, with the evidence attached.</span>
+{
+  <span class="c-ky">"response"</span>: { <span class="c-ky">"contexts"</span>: [ ... ] },
+  <span class="c-ky">"meta"</span>: {
+    <span class="c-ky">"cache_hit"</span>: <span class="c-nm">true</span>,
+    <span class="c-ky">"similarity"</span>: <span class="c-nm">1.0</span>,
+    <span class="c-ky">"latency_ms"</span>: <span class="c-nm">210.4</span>,
+    <span class="c-ky">"model"</span>: <span class="c-nm">null</span>,
+    <span class="c-ky">"fallback"</span>: <span class="c-nm">null</span>
+  }
+}</code></pre>
+  </div>
+</section>
+
+<!-- ================================================================ cta -->
+<section class="cta">
+  <div class="cta__glow" aria-hidden="true"></div>
+  <span class="eyebrow">&#9670; Runs entirely on your machine</span>
+  <h2>See it decline a near-tie<br>instead of guessing.</h2>
+  <p>
+    Send the same complaint twice and watch the cold path collapse into a cache hit. Clear
+    the reference text and watch it refuse to invent a plan.
+  </p>
+  <div class="hero__cta">
+    <a class="btn btn--primary" href="/console.html">Open the live console</a>
+    <a class="btn" href="#benchmarks">Read the measurements</a>
+  </div>
+  <p class="cta__foot mono">
+    PostgreSQL 17 + pgvector &middot; fastembed / ONNX Runtime &middot; FastAPI &middot; no GPU required
+  </p>
+</section>
+
+</main>
+
+<!-- ============================================================= footer -->
+<footer class="foot">
+  <div class="foot__brand">
+    <span class="mark" aria-hidden="true"></span>
+    <div>
+      <strong>Smart Guided Troubleshooting Engine</strong>
+      <p>
+        Samsung PRISM Generative AI Hackathon, Theme 2. Turns unstructured device
+        complaints into validated, deeplinked plans.
+      </p>
+    </div>
+  </div>
+
+  <div class="foot__cols">
+    <div>
+      <h4>Product</h4>
+      <a href="/console.html">Live console</a>
+      <a href="#cache">Semantic cache</a>
+      <a href="#benchmarks">Benchmarks</a>
+    </div>
+    <div>
+      <h4>Engine</h4>
+      <a href="/docs" target="_blank" rel="noopener">API documentation</a>
+      <a href="/health" target="_blank" rel="noopener">Readiness probe</a>
+      <a href="/cache/stats" target="_blank" rel="noopener">Cache statistics</a>
+    </div>
+    <div>
+      <h4>Data</h4>
+      <a href="/v1/examples" target="_blank" rel="noopener">Official complaints</a>
+      <span>578-entry deeplink catalog</span>
+      <span>BAAI/bge-small-en-v1.5</span>
+    </div>
+  </div>
+
+  <div class="foot__base">
+    <span class="mono">Every figure on this page was measured on this project. Unmeasured rows are named as such.</span>
+    <span class="mono" id="foot-health">&mdash;</span>
+  </div>
+</footer>
+
+<script src="landing.js?v=1"></script>
+</body>
+</html>
