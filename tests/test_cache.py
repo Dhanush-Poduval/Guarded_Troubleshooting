@@ -30,6 +30,35 @@ from tests.conftest import TEST_CACHE_VERSION_FLOOR
 
 _version_counter = itertools.count(TEST_CACHE_VERSION_FLOOR)
 
+# The real Phase 0-2 pipeline derives plans from SIIS reference text and returns the
+# specified "no_siis_context" fallback with no contexts when none is supplied. That is
+# correct behaviour, so any test that expects a plan to be produced and cached must pass
+# reference text. These tests were originally written against the mock, which produced a
+# plan regardless, and that assumption no longer holds.
+SIIS_TEXT = (
+    "Display and power troubleshooting for Galaxy devices. "
+    "Step 1: Check the screen brightness and adaptive brightness settings, since a very "
+    "low brightness level can make the display look blank. "
+    "Step 2: Open Device care and review battery usage by app to find software draining "
+    "power in the background. "
+    "Step 3: Restrict background usage for apps you rarely use, then restart the device "
+    "so the changes take effect. "
+    "Step 4: If the screen still does not respond, perform a forced restart by holding "
+    "the power and volume down buttons together. "
+    "Step 5: If the problem continues after a restart, back up your data and contact "
+    "Samsung support or visit an authorised service centre for a hardware inspection."
+)
+
+
+async def solve(service, query, **kwargs):
+    """Run a query with reference text, so the pipeline can produce a plan.
+
+    Tests that specifically exercise the no-reference-text path call troubleshoot
+    directly instead of going through this helper.
+    """
+    kwargs.setdefault("siis_response", SIIS_TEXT)
+    return await service.troubleshoot(query, **kwargs)
+
 
 @pytest.fixture
 def isolated_settings(settings, clean_test_cache_versions) -> Settings:
@@ -60,7 +89,7 @@ async def service_and_pool(isolated_settings, db_connection):
 
 async def test_cold_query_is_a_miss_and_invokes_the_pipeline(service_and_pool):
     service, _ = service_and_pool
-    outcome = await service.troubleshoot("My battery is draining very quickly")
+    outcome = await solve(service, "My battery is draining very quickly")
 
     assert outcome.cache_hit is False
     assert outcome.pipeline_invoked is True
@@ -70,7 +99,7 @@ async def test_cold_query_is_a_miss_and_invokes_the_pipeline(service_and_pool):
 
 async def test_miss_populates_the_cache_with_every_phrasing(service_and_pool):
     service, pool = service_and_pool
-    await service.troubleshoot("Screen is too dim outdoors")
+    await solve(service, "Screen is too dim outdoors")
 
     async with pool.connection() as conn:
         cur = await conn.execute(
@@ -96,8 +125,8 @@ async def test_miss_populates_the_cache_with_every_phrasing(service_and_pool):
 async def test_identical_repeat_query_hits_the_cache(service_and_pool):
     service, _ = service_and_pool
     query = "Running out of storage space"
-    await service.troubleshoot(query)
-    second = await service.troubleshoot(query)
+    await solve(service, query)
+    second = await solve(service, query)
 
     assert second.cache_hit is True
     assert second.pipeline_invoked is False
@@ -108,8 +137,8 @@ async def test_unseen_paraphrase_hits_the_cache(service_and_pool):
     """The behaviour the whole design exists for: a rewording the system has never seen
     must reach the cached plan without invoking the pipeline."""
     service, _ = service_and_pool
-    await service.troubleshoot("My battery is draining very quickly")
-    outcome = await service.troubleshoot("My phone battery dies really fast")
+    await solve(service, "My battery is draining very quickly")
+    outcome = await solve(service, "My phone battery dies really fast")
 
     assert outcome.cache_hit is True
     assert outcome.pipeline_invoked is False
@@ -119,8 +148,8 @@ async def test_unseen_paraphrase_hits_the_cache(service_and_pool):
 async def test_unrelated_query_does_not_hit_a_cached_plan(service_and_pool):
     """A false positive here would serve battery advice to a camera question."""
     service, _ = service_and_pool
-    await service.troubleshoot("My battery is draining very quickly")
-    outcome = await service.troubleshoot("How do I change the camera resolution")
+    await solve(service, "My battery is draining very quickly")
+    outcome = await solve(service, "How do I change the camera resolution")
 
     assert outcome.cache_hit is False
     assert outcome.pipeline_invoked is True
@@ -128,8 +157,8 @@ async def test_unrelated_query_does_not_hit_a_cached_plan(service_and_pool):
 
 async def test_cache_hit_is_faster_than_the_miss_that_created_it(service_and_pool):
     service, _ = service_and_pool
-    miss = await service.troubleshoot("Colours look washed out on my screen")
-    hit = await service.troubleshoot("Colours look washed out on my screen")
+    miss = await solve(service, "Colours look washed out on my screen")
+    hit = await solve(service, "Colours look washed out on my screen")
 
     assert hit.cache_hit and not miss.cache_hit
     assert hit.latency_ms < miss.latency_ms
@@ -148,8 +177,8 @@ async def test_raising_the_threshold_turns_a_hit_into_a_miss(
     await pool.open()
     try:
         service = build_service(pool, strict)
-        await service.troubleshoot("My battery is draining very quickly")
-        outcome = await service.troubleshoot("My phone battery dies really fast")
+        await solve(service, "My battery is draining very quickly")
+        outcome = await solve(service, "My phone battery dies really fast")
         assert outcome.cache_hit is False
     finally:
         await pool.close()
@@ -159,7 +188,7 @@ async def test_cache_versions_are_isolated(service_and_pool, isolated_settings):
     """A version bump must invalidate everything at once rather than leaking old plans."""
     service, _ = service_and_pool
     query = "Apps keep closing on their own"
-    await service.troubleshoot(query)
+    await solve(service, query)
 
     bumped = isolated_settings.model_copy(
         update={"cache_version": isolated_settings.cache_version + 500}
@@ -168,7 +197,7 @@ async def test_cache_versions_are_isolated(service_and_pool, isolated_settings):
     await pool.open()
     try:
         other = build_service(pool, bumped)
-        outcome = await other.troubleshoot(query)
+        outcome = await solve(other, query)
         assert outcome.cache_hit is False
     finally:
         await pool.close()
@@ -182,13 +211,13 @@ async def test_served_plan_always_validates(service_and_pool):
     """Whether served from the pipeline or from the cache, output must be rule-compliant."""
     service, _ = service_and_pool
     for query in ("My battery is draining very quickly", "My phone battery dies really fast"):
-        outcome = await service.troubleshoot(query)
+        outcome = await solve(service, query)
         assert validate_plan(outcome.response, service._permitted).ok
 
 
 async def test_every_served_deeplink_exists_in_the_catalog(service_and_pool):
     service, _ = service_and_pool
-    outcome = await service.troubleshoot("Swipe gestures go the wrong way after an app")
+    outcome = await solve(service, "Swipe gestures go the wrong way after an app")
     for goal in outcome.response.contexts:
         for action in goal.actions:
             for group in action.stepGroups:
@@ -229,7 +258,7 @@ async def test_invalid_pipeline_output_is_neither_served_nor_cached(service_and_
             )
 
     service._pipeline = BrokenPipeline()
-    outcome = await service.troubleshoot("trigger the broken pipeline")
+    outcome = await solve(service, "trigger the broken pipeline")
 
     assert outcome.response.contexts == []
     assert outcome.fallback == "no_match"
@@ -267,8 +296,8 @@ async def test_pipeline_returns_eight_to_ten_variations(service_and_pool):
 async def test_metrics_are_recorded_for_hits_and_misses(service_and_pool):
     service, pool = service_and_pool
     query = "Device feels laggy when switching apps"
-    miss = await service.troubleshoot(query)
-    hit = await service.troubleshoot(query)
+    miss = await solve(service, query)
+    hit = await solve(service, query)
 
     async with pool.connection() as conn:
         cur = await conn.execute(
@@ -286,7 +315,7 @@ async def test_metrics_are_recorded_for_hits_and_misses(service_and_pool):
 
 async def test_cache_stats_reports_measured_values(service_and_pool):
     service, pool = service_and_pool
-    await service.troubleshoot("Phone takes forever to charge")
+    await solve(service, "Phone takes forever to charge")
 
     async with pool.connection() as conn:
         stats = await cache_stats(conn, service._settings)
@@ -300,7 +329,11 @@ async def test_cache_stats_reports_measured_values(service_and_pool):
 async def test_synthetic_provenance_is_recorded(service_and_pool):
     """Plans built on fixture deeplinks must be identifiable so they can be purged."""
     service, pool = service_and_pool
-    await service.troubleshoot("My photos look blurry")
+    # The query has to be answerable from SIIS_TEXT. The pipeline is required not to
+    # invent steps the reference text does not contain, so an unrelated complaint yields
+    # no actions, nothing is cached, and this test would fail for a reason that has
+    # nothing to do with provenance.
+    await solve(service, "My Galaxy screen goes completely blank and will not come back")
 
     async with pool.connection() as conn:
         cur = await conn.execute(
@@ -318,9 +351,9 @@ async def test_force_pipeline_skips_the_cache(service_and_pool):
     there are canonical queries."""
     service, _ = service_and_pool
     query = "Screen turns off too fast"
-    await service.troubleshoot(query)
+    await solve(service, query)
 
-    forced = await service.troubleshoot(query, force_pipeline=True)
+    forced = await solve(service, query, force_pipeline=True)
     assert forced.cache_hit is False
     assert forced.pipeline_invoked is True
 
@@ -328,7 +361,7 @@ async def test_force_pipeline_skips_the_cache(service_and_pool):
 async def test_prewarm_origin_is_recorded(service_and_pool, ):
     """Pre-warmed coverage must be distinguishable from plans accumulated by live traffic."""
     service, pool = service_and_pool
-    await service.troubleshoot(
+    await solve(service, 
         "Battery percentage drops suddenly overnight", force_pipeline=True, origin="prewarm"
     )
 
@@ -344,9 +377,12 @@ async def test_a_paraphrase_can_match_a_stored_paraphrase(service_and_pool):
     """The reason every phrasing is indexed rather than one canonical key: a reworded
     query may be closer to a stored paraphrase than to the canonical form."""
     service, pool = service_and_pool
-    await service.troubleshoot("Running out of storage space")
+    # Both phrasings describe the same problem, and it is a problem SIIS_TEXT actually
+    # covers. A pair drawn from a different topic would fail for want of a matching plan
+    # rather than for want of paraphrase indexing, which is what this test is about.
+    await solve(service, "My Galaxy screen keeps going blank while I am using it")
 
-    outcome = await service.troubleshoot("There is no space left on my phone")
+    outcome = await solve(service, "The display on my phone keeps going dark by itself")
     assert outcome.cache_hit is True
 
     async with pool.connection() as conn:
@@ -376,11 +412,11 @@ async def test_near_tie_between_two_plans_is_rejected_as_ambiguous(service_and_p
     from app.cache.store import lookup_detailed
 
     service, pool = service_and_pool
-    await service.troubleshoot(
+    await solve(service, 
         "My Galaxy Z Flip 7 screen went completely black, so I cannot interact with it",
         force_pipeline=True,
     )
-    await service.troubleshoot(
+    await solve(service, 
         "My Galaxy S24 screen goes completely blank, just a dark screen with scrolling",
         force_pipeline=True,
     )
@@ -404,8 +440,8 @@ async def test_a_clear_winner_is_not_rejected(service_and_pool):
 
     service, pool = service_and_pool
     query = "My Galaxy S22 screen inputs are delayed and touch responsiveness is laggy"
-    await service.troubleshoot(query, force_pipeline=True)
-    await service.troubleshoot(
+    await solve(service, query, force_pipeline=True)
+    await solve(service, 
         "My Galaxy phone screen is completely cracked and unusable", force_pipeline=True
     )
 
@@ -424,7 +460,7 @@ async def test_single_cached_plan_has_no_runner_up(service_and_pool):
 
     service, pool = service_and_pool
     query = "My Galaxy A17 screen looks distorted right after I received the phone"
-    await service.troubleshoot(query, force_pipeline=True)
+    await solve(service, query, force_pipeline=True)
 
     probe = await service._embed_one(query)
     async with pool.connection() as conn:
@@ -438,7 +474,7 @@ async def test_single_cached_plan_has_no_runner_up(service_and_pool):
 async def test_rejection_reason_is_recorded_for_analysis(service_and_pool):
     """The margin should be tunable from data, so what the check saw is persisted."""
     service, pool = service_and_pool
-    await service.troubleshoot("My Galaxy S25 has a floating circle hovering on screen")
+    await solve(service, "My Galaxy S25 has a floating circle hovering on screen")
 
     async with pool.connection() as conn:
         cur = await conn.execute(

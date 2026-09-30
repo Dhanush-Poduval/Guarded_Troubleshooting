@@ -188,7 +188,9 @@ def test_the_official_sample_output_validates():
 
     payload = _json.loads(sample_path.read_text(encoding="utf-8"))
     response = ContextDeeplinkResponse.model_validate(payload["response"])
-    permitted = load_catalog(catalog_path).deeplink_set()
+    # Both URI namespaces: a plan legitimately references actionable and validation
+    # deeplinks, and validation receives a single permitted collection.
+    permitted = load_catalog(catalog_path).permitted_deeplink_set()
 
     report = validate_plan(response, permitted)
     assert report.ok, report.summary()

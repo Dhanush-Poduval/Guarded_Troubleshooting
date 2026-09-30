@@ -1,4 +1,4 @@
-# Smart Guided Troubleshooting Engine
+﻿# Smart Guided Troubleshooting Engine
 
 Turns unstructured Galaxy device complaints into validated, deeplinked troubleshooting
 plans, served from a semantic cache so that a previously-seen problem is answered without
@@ -17,9 +17,11 @@ Raw complaint (+ optional SIIS reference text)
   └─ [4] REST API service             ── this repository
 ```
 
-Phases 3 and 4 are implemented here. Phases 0 to 2 sit behind a single interface,
-`app/pipeline/port.py`, and are currently satisfied by a temporary mock. Swapping in the
-real implementation is one change in `app/bootstrap.py`.
+All five phases are implemented. Phases 0 to 2 sit behind a single interface,
+`app/pipeline/port.py`, and are satisfied by `app/pipeline/real/pipeline.py`, which calls
+Gemini for query enrichment and structure extraction and resolves deeplinks through the
+hybrid retrieval layer. The mock that stood in during development is retained in
+`app/pipeline/mock/` for offline testing.
 
 ## Request flow
 
@@ -37,11 +39,13 @@ resolve. Nothing invalid is ever served or stored.
 
 ## Setup
 
-Requires Docker and Python 3.12.
+Requires Docker, Python 3.12, and a Gemini API key for the Phase 0-2 pipeline.
 
 ```bash
 pip install -r requirements-dev.txt
 cp .env.example .env
+# Set GEMINI_API_KEY in .env before continuing: Phase 0-2 calls Gemini and the
+# service will not start without it. Key from https://aistudio.google.com/apikey
 docker compose up -d
 python -m scripts.init_db          # create schema
 python -m scripts.build_catalog    # embed the 578-entry deeplink catalog
