@@ -822,3 +822,4 @@ python -m pytest \
 
 - Presentation: [View Presentation](./presentation/Smart_Guided_Troubleshooting_Final_Submission_filled.pptx)
 - Demo Video: [Watch Demo Video](https://drive.google.com/file/d/1tVMslTQtBKIP-qObZXfjxNKbqdIfXCeE/view?usp=sharing)
+- Ai Disclosure: [View Disclosure](./ai_disclosure/LangAI3.0_AI_Disclosure.docx)
