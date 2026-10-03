@@ -55,8 +55,16 @@
     abandon: $('res-abandon'),
 
     receipt: $('receipt'),
+    rail: $('res-rail'),
+    bicon: $('res-bicon'),
+    action: $('res-action'),
     toast: $('toast'),
   };
+
+  function reducedMotion() {
+    return window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
 
   let session = null;
   let busy = false;
@@ -64,12 +72,22 @@
   /* The exact words a user sees for each status. Kept in one place so a status can
      never be described one way in the banner and another in the receipt. */
   const LABEL = {
-    pending: 'Not checked yet',
+    pending: 'Awaiting action',
     system_verified: 'System verified',
     user_confirmed: 'User confirmed',
     verification_failed: 'Verification failed',
     verification_unavailable: 'Verification unavailable',
     inconclusive: 'Inconclusive',
+  };
+
+  /* Each status gets its own glyph as well as its own colour and wording. */
+  const ICON = {
+    pending: '#i-info',
+    system_verified: '#i-check-circle',
+    user_confirmed: '#i-check',
+    verification_failed: '#i-x-circle',
+    verification_unavailable: '#i-alert',
+    inconclusive: '#i-alert',
   };
 
   const WHY = {
@@ -244,15 +262,123 @@
     el.expect.appendChild(row);
   }
 
+  /* The rail reflects how far this action has actually got. "Evaluating" is only ever
+     momentary in this deployment, so it is marked done once any attempt exists rather
+     than shown as a stage the server reported being inside. */
+  function paintRail(view) {
+    if (!el.rail) return;
+    const status = view.verification_status;
+    const attempts = view.attempts || [];
+    const opened = Boolean(view.current) && view.status !== 'pending';
+    const hasEvidence = attempts.length > 0;
+    const settled = status !== 'pending';
+
+    const failed = status === 'verification_failed';
+    const state = {
+      recommended: 'done',
+      opened: opened ? 'done' : 'idle',
+      awaiting: hasEvidence ? 'done' : (opened ? 'active' : 'idle'),
+      evaluating: hasEvidence ? 'done' : 'idle',
+      verified: settled ? (failed ? 'failed' : 'done') : (hasEvidence ? 'active' : 'idle'),
+    };
+
+    Array.prototype.forEach.call(el.rail.children, (li) => {
+      const key = li.dataset.k;
+      li.dataset.state = state[key] || 'idle';
+      li.dataset.done = state[key] === 'done' ? 'yes' : 'no';
+    });
+
+    // The final node names the outcome, so the rail reads correctly on its own.
+    const last = el.rail.lastElementChild;
+    if (last) {
+      const label = last.querySelector('.rail__label');
+      label.textContent = settled ? (LABEL[status] || 'Result') : 'Result';
+    }
+  }
+
+  function resetRail() {
+    if (!el.rail) return;
+    Array.prototype.forEach.call(el.rail.children, (li) => {
+      li.dataset.state = 'idle';
+      li.dataset.done = 'no';
+    });
+    const last = el.rail.lastElementChild;
+    if (last) last.querySelector('.rail__label').textContent = 'Result';
+    const history = document.getElementById('res-history');
+    if (history) history.remove();
+  }
+
+  function renderHistory(view) {
+    const attempts = view.attempts || [];
+    let host = document.getElementById('res-history');
+    if (attempts.length < 2) {
+      if (host) host.remove();
+      return;
+    }
+    if (!host) {
+      host = document.createElement('div');
+      host.className = 'history';
+      host.id = 'res-history';
+      el.check.appendChild(host);
+    }
+    host.textContent = '';
+
+    const k = document.createElement('span');
+    k.className = 'history__k';
+    k.textContent = 'Previous attempts';
+    host.appendChild(k);
+
+    // Oldest first, current one excluded: it is already shown above in full.
+    attempts.slice(0, -1).forEach((a) => {
+      const row = document.createElement('div');
+      row.className = 'history__row';
+
+      const no = document.createElement('span');
+      no.className = 'history__no';
+      no.textContent = '#' + a.attempt_no;
+      row.appendChild(no);
+
+      const name = document.createElement('span');
+      name.className = 'history__name';
+      name.textContent = a.action_name;
+      row.appendChild(name);
+
+      const src = document.createElement('span');
+      src.className = 'res__src';
+      src.dataset.s = a.evidence_source;
+      src.textContent = LABEL[a.verification_status] || a.verification_status;
+      row.appendChild(src);
+
+      host.appendChild(row);
+    });
+  }
+
   function render(view) {
     session = view;
     el.panel.hidden = false;
     el.start.hidden = true;
 
     const status = view.verification_status;
+    const changed = el.banner.dataset.state !== status;
     el.banner.dataset.state = status;
     el.badge.textContent = LABEL[status] || status;
     el.why.textContent = WHY[status] || '';
+
+    if (el.bicon) {
+      el.bicon.firstElementChild.setAttribute('href', ICON[status] || '#i-info');
+    }
+
+    // One short pulse on a trusted verification, and only when the state just became
+    // one. Re-rendering the same state must not replay it.
+    el.banner.classList.remove('is-verified');
+    if (changed && status === 'system_verified' && !reducedMotion()) {
+      // Reflow so the animation restarts rather than being deduplicated.
+      void el.banner.offsetWidth;
+      el.banner.classList.add('is-verified');
+    }
+
+    paintRail(view);
+    renderHistory(view);
 
     if (view.current) {
       renderStep(view.current);
@@ -471,12 +597,14 @@
       el.start.hidden = contexts.length === 0;
       el.panel.hidden = true;
       el.receipt.hidden = true;
+      resetRail();
       session = null;
     },
     hide() {
       el.start.hidden = true;
       el.panel.hidden = true;
       el.receipt.hidden = true;
+      resetRail();
       session = null;
     },
   };

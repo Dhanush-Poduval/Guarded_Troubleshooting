@@ -61,8 +61,16 @@ const el = {
   raw: $('raw'),
 
   refreshStats: $('refresh-stats'),
+  cachePill: $('cache-pill-text'),
   toast: $('toast'),
 };
+
+/* One source of truth for whether this client should animate. Checked at call time
+   rather than cached, because a user can change the OS setting mid-session. */
+function reducedMotion() {
+  return window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
 let lastPayload = null;
 let inFlight = false;
@@ -504,19 +512,22 @@ function renderEvidence(data, counts) {
 
 /* ---------------------------------------------------------------- request */
 
+/* The backend exposes a single pending state, so these are explanatory labels cycled on
+   a timer rather than progress the server reported. They are ordered to match the work
+   it actually does, and under reduced motion only the first is shown. */
+const PHASES = [
+  [0, 'Understanding complaint…'],
+  [900, 'Retrieving relevant context…'],
+  [2200, 'Validating safe actions…'],
+  [6000, 'Preparing diagnostic plan…'],
+];
+
 function startPhases() {
-  el.workingText.textContent = 'Embedding the complaint…';
-  phaseTimers = [
-    setTimeout(() => { el.workingText.textContent = 'Searching the semantic cache…'; }, 500),
-    setTimeout(() => {
-      el.workingText.textContent =
-        'No close match, so the full pipeline is running…';
-    }, 1600),
-    setTimeout(() => {
-      el.workingText.textContent =
-        'Extracting structure, then resolving deeplinks against the catalog…';
-    }, 6000),
-  ];
+  el.workingText.textContent = PHASES[0][1];
+  if (reducedMotion()) return;
+  phaseTimers = PHASES.slice(1).map(([delay, label]) =>
+    setTimeout(() => { el.workingText.textContent = label; }, delay)
+  );
 }
 
 function stopPhases() {
@@ -534,6 +545,7 @@ async function send(payload) {
   if (el.planhead) el.planhead.hidden = true;
   if (window.__resolution) window.__resolution.hide();
   el.working.hidden = false;
+  el.form.classList.add('is-busy');
   startPhases();
 
   try {
@@ -575,6 +587,7 @@ async function send(payload) {
     toast('Could not reach the API. Is uvicorn still running?');
   } finally {
     stopPhases();
+    el.form.classList.remove('is-busy');
     el.working.hidden = true;
     el.go.disabled = false;
     inFlight = false;
@@ -664,6 +677,13 @@ async function loadStats() {
     $('r-threshold').textContent = 'below threshold ' + num(s.rejected_below_threshold);
     $('r-ambiguous').textContent = 'too ambiguous ' + num(s.rejected_ambiguous);
     $('r-reval').textContent = 'failed re-validation ' + num(s.rejected_failed_revalidation);
+
+    if (el.cachePill) {
+      const rate = s.hit_rate === null || s.hit_rate === undefined
+        ? '—'
+        : Math.round(s.hit_rate * 100) + '%';
+      el.cachePill.textContent = `cache ${s.cached_plans} plans · ${rate} hit`;
+    }
   } catch (err) {
     /* The stats strip is informational; a failure here must not disturb the page. */
   }
