@@ -81,6 +81,15 @@ class TroubleshootingService:
         self._catalog_source = catalog_source
         self._settings = settings or get_settings()
 
+    @property
+    def permitted_deeplinks(self) -> frozenset[str]:
+        """The catalog-authorised URI set, shared with the resolution service.
+
+        Exposed so the resolution loop can validate plan snapshots against exactly the
+        same set this service validates against, without loading the catalog twice.
+        """
+        return self._permitted
+
     async def _embed_one(self, text: str) -> np.ndarray:
         return await anyio.to_thread.run_sync(self._encoder.encode_one_for_cache, text)
 

@@ -687,3 +687,240 @@ textarea:focus { border-color: var(--violet-deep); background: #16162170; }
   .latency__num b { font-size: 25px; }
   .ask__actions .btn--quiet { margin-left: 0; }
 }
+
+/* ------------------------------------------------- verified resolution loop */
+
+.startres {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.startres__note { font-size: 12px; color: var(--muted); flex: 1; min-width: 180px; }
+
+.res {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.res__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.res__progress { font-size: 11px; color: var(--dim); }
+
+/* The banner is the one place a user looks for "did this work?", so each status gets a
+   visually distinct treatment rather than differing only in wording. */
+.res__banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.res__badge { font-size: 14.5px; font-weight: 700; letter-spacing: -.2px; }
+.res__why { font-size: 12px; color: var(--muted); }
+
+.res__banner[data-state="system_verified"] {
+  background: rgba(52, 211, 153, .09);
+  border-color: rgba(52, 211, 153, .32);
+}
+.res__banner[data-state="system_verified"] .res__badge { color: var(--green); }
+
+/* User confirmation is a legitimate outcome but must never read as a system check, so
+   it takes the neutral violet rather than the green reserved for verified. */
+.res__banner[data-state="user_confirmed"] {
+  background: rgba(139, 92, 246, .09);
+  border-color: rgba(139, 92, 246, .32);
+}
+.res__banner[data-state="user_confirmed"] .res__badge { color: var(--violet-bright); }
+
+.res__banner[data-state="verification_failed"] {
+  background: rgba(251, 113, 133, .08);
+  border-color: rgba(251, 113, 133, .3);
+}
+.res__banner[data-state="verification_failed"] .res__badge { color: var(--rose); }
+
+.res__banner[data-state="verification_unavailable"],
+.res__banner[data-state="inconclusive"] {
+  background: rgba(251, 191, 36, .07);
+  border-color: rgba(251, 191, 36, .3);
+}
+.res__banner[data-state="verification_unavailable"] .res__badge,
+.res__banner[data-state="inconclusive"] .res__badge { color: var(--amber); }
+
+.res__action {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  padding: 16px 18px;
+}
+.res__top { display: flex; align-items: center; gap: 12px; }
+.res__num {
+  width: 24px; height: 24px;
+  flex: 0 0 24px;
+  border-radius: 50%;
+  background: rgba(139, 92, 246, .16);
+  border: 1px solid rgba(139, 92, 246, .4);
+  color: var(--violet-bright);
+  font-size: 11.5px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+.res__name { font-size: 14px; font-weight: 650; flex: 1; min-width: 0; }
+.res__desc { font-size: 12.8px; color: var(--muted); margin: 9px 0 0 36px; }
+.res__action .steps { margin: 12px 0 0 36px; }
+.res__action .links { margin-left: 36px; }
+
+.res__check { margin-top: 14px; }
+.res__check.is-done .res__controls { opacity: .5; }
+
+.res__expect {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  padding: 11px 14px;
+}
+.res__expectk { font-size: 9px; letter-spacing: .13em; color: var(--dim); }
+.res__expectv { font-size: 12.5px; color: var(--text); }
+
+.res__observed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin-top: 4px;
+}
+.res__src {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(138, 138, 158, .14);
+}
+.res__src[data-s="trusted_adapter"] { color: var(--green); background: rgba(52, 211, 153, .13); }
+.res__src[data-s="client_reported"] { color: var(--amber); background: rgba(251, 191, 36, .13); }
+
+.res__controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.res__controls--advance { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 14px; }
+.btn--ok { border-color: rgba(52, 211, 153, .4); color: var(--green); }
+.btn--ok:hover:not(:disabled) { background: rgba(52, 211, 153, .1); }
+
+.res__observe {
+  margin-top: 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  padding: 13px 15px;
+}
+.res__label { display: block; font-size: 12px; font-weight: 620; margin-bottom: 8px; }
+.res__observerow { display: flex; gap: 8px; flex-wrap: wrap; }
+.res__input {
+  flex: 1;
+  min-width: 160px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text);
+  padding: 8px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+}
+.res__hint { font-size: 11px; color: var(--amber); margin: 9px 0 0; }
+
+/* -------------------------------------------------------------- receipt */
+
+.receipt {
+  margin-top: 16px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  padding: 16px 18px;
+}
+/* The two receipt kinds are deliberately different objects on the page, not the same
+   object with different words, so one can never be skim-read as the other. */
+.receipt[data-kind="system"] {
+  border-color: rgba(52, 211, 153, .35);
+  background: rgba(52, 211, 153, .06);
+}
+.receipt[data-kind="user"] {
+  border-color: rgba(139, 92, 246, .35);
+  background: rgba(139, 92, 246, .06);
+}
+
+.receipt__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.receipt__head strong { font-size: 14px; }
+.receipt__badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  padding: 4px 11px;
+  border-radius: 999px;
+}
+.receipt__badge[data-kind="system"] { color: var(--green); background: rgba(52, 211, 153, .16); }
+.receipt__badge[data-kind="user"] { color: var(--violet-bright); background: rgba(139, 92, 246, .16); }
+
+.receipt__grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 140px) minmax(0, 1fr);
+  gap: 6px 14px;
+}
+.receipt__grid dt {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  align-self: center;
+}
+.receipt__grid dd {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.receipt__caveat {
+  font-size: 11.5px;
+  color: var(--violet-bright);
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 620px) {
+  .receipt__grid { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .receipt__grid dd { margin-bottom: 8px; }
+}

@@ -532,6 +532,7 @@ async function send(payload) {
   el.empty.hidden = true;
   el.result.hidden = true;
   if (el.planhead) el.planhead.hidden = true;
+  if (window.__resolution) window.__resolution.hide();
   el.working.hidden = false;
   startPhases();
 
@@ -561,6 +562,8 @@ async function send(payload) {
     const counts = renderPlan(body);
     renderEvidence(body, counts);
     el.result.hidden = false;
+    // Offer the guided resolution loop for a plan that actually has actions to walk.
+    if (window.__resolution) window.__resolution.offer(body);
     el.again.disabled = false;
     el.result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     loadStats();
@@ -601,6 +604,7 @@ el.reset.addEventListener('click', () => {
   el.result.hidden = true;
   el.result.textContent = '';
   if (el.planhead) el.planhead.hidden = true;
+  if (window.__resolution) window.__resolution.hide();
   el.empty.hidden = false;
   el.verdict.dataset.state = 'idle';
   el.verdictTag.textContent = 'Awaiting a request';

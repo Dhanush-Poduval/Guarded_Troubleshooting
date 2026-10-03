@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Console &middot; Smart Guided Troubleshooting Engine</title>
 <meta name="description" content="Live console: send a Galaxy device complaint and watch it resolve into a validated, deeplinked plan.">
-<link rel="stylesheet" href="theme.css?v=2">
-<link rel="stylesheet" href="console.css?v=2">
+<link rel="stylesheet" href="theme.css?v=3">
+<link rel="stylesheet" href="console.css?v=3">
 </head>
 <body class="is-console">
 
@@ -85,6 +85,72 @@
     </div>
 
     <div class="result" id="result" hidden></div>
+
+    <!-- The verified resolution loop. Hidden until a plan exists to walk. -->
+    <div class="startres" id="startres" hidden>
+      <button class="btn btn--primary" id="start-resolution" type="button">
+        <span aria-hidden="true">&#9654;</span> Start guided resolution
+      </button>
+      <span class="startres__note">
+        Take the plan one action at a time, and check the result of each before moving on.
+      </span>
+    </div>
+
+    <section class="res" id="res" hidden aria-live="polite">
+      <div class="res__head">
+        <span class="eyebrow"><span class="eyebrow__bead" aria-hidden="true"></span> Guided resolution</span>
+        <span class="res__progress mono" id="res-progress"></span>
+      </div>
+
+      <div class="res__banner" id="res-banner" data-state="pending">
+        <span class="res__badge" id="res-badge">Not checked yet</span>
+        <span class="res__why" id="res-why">Perform the action below, then check the result.</span>
+      </div>
+
+      <div class="res__action" id="res-action">
+        <div class="res__top">
+          <span class="res__num" id="res-num">1</span>
+          <span class="res__name" id="res-name"></span>
+          <span class="cat" id="res-cat"></span>
+        </div>
+        <p class="res__desc" id="res-desc"></p>
+        <ol class="steps" id="res-steps"></ol>
+        <div class="links" id="res-links"></div>
+      </div>
+
+      <div class="res__check" id="res-check">
+        <div class="res__expect" id="res-expect"></div>
+
+        <div class="res__controls">
+          <button class="btn btn--sm" id="res-verify" type="button">Check automatically</button>
+          <button class="btn btn--sm" id="res-report" type="button">Enter what I see</button>
+          <button class="btn btn--sm btn--ok" id="res-fixed" type="button">This fixed it</button>
+          <button class="btn btn--sm" id="res-notfixed" type="button">Still not fixed</button>
+        </div>
+
+        <div class="res__observe" id="res-observe" hidden>
+          <label class="res__label" for="res-observed" id="res-observe-label">
+            Value shown on your device
+          </label>
+          <div class="res__observerow">
+            <input class="res__input" id="res-observed" type="text" autocomplete="off"
+                   placeholder="e.g. True">
+            <button class="btn btn--sm" id="res-submit" type="button">Submit reading</button>
+          </div>
+          <p class="res__hint">
+            A value you type is recorded as client-reported evidence. It is never shown as
+            system verified, because this page cannot read your device.
+          </p>
+        </div>
+
+        <div class="res__controls res__controls--advance">
+          <button class="btn btn--sm btn--primary" id="res-next" type="button">Next action</button>
+          <button class="btn btn--sm btn--quiet" id="res-abandon" type="button">End session</button>
+        </div>
+      </div>
+
+      <div class="receipt" id="receipt" hidden></div>
+    </section>
 
     <div class="empty" id="empty">
       <div class="empty__art" aria-hidden="true"></div>
@@ -188,6 +254,7 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="app.js?v=2"></script>
+<script src="app.js?v=3"></script>
+<script src="resolution.js?v=1"></script>
 </body>
 </html>
