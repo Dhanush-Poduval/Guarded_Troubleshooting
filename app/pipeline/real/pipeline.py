@@ -12,6 +12,7 @@ Phase 2:
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 
@@ -40,6 +41,8 @@ from app.retrieval.resolver import (
     CatalogMatch,
     search_catalog,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RealPipeline:
@@ -326,6 +329,37 @@ class RealPipeline:
                     ),
                 )
             )
+
+        # ------------------------------------------------------
+        # The auto invariant.
+        #
+        # "auto" tells the client this action can be carried out by
+        # opening a setting. When verification returns no catalog
+        # destination there is nothing to open, so the honest final
+        # category is manual: the grounded steps are kept and the user
+        # follows them by hand.
+        #
+        # The alternative -- keeping auto and attaching the nearest
+        # ranked URI -- is what this whole resolution path exists to
+        # prevent, and it is how a plan ends up opening the wrong
+        # screen with an authoritative label on it.
+        #
+        # critical is never downgraded. Its category describes how
+        # disruptive the action is, not how it is carried out, and
+        # losing it would move a destructive step out of the ordering
+        # and acknowledgement rules that depend on it.
+        # ------------------------------------------------------
+
+        if (
+            category == actionCategory.auto
+            and match is None
+        ):
+            logger.info(
+                "no verified catalog destination for %r; "
+                "downgrading auto to manual",
+                extracted_action.action_name,
+            )
+            category = actionCategory.manual
 
         # ------------------------------------------------------
         # Contract conversion
