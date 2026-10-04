@@ -18,7 +18,7 @@ from app.pipeline.enrichment.prompts import (
 from app.pipeline.enrichment.schema import EnrichedQuery
 
 
-class QueryEnrichmentError(RuntimeError):
+class QueryEnrichmentError(ValueError):
     """Raised when query enrichment fails."""
 
 
@@ -888,44 +888,66 @@ class QueryEnricher:
     def _parse_json(
         text: str,
     ) -> dict:
-        """Parse Gemini JSON response."""
+        """
+        Parse a Gemini JSON response robustly.
+
+        Gemini is requested to return application/json, but may
+        occasionally wrap the object in a Markdown fence or append
+        extra text after an otherwise valid JSON object.
+
+        The first complete JSON value is decoded and must be an
+        object. Full EnrichedQuery schema validation still happens
+        immediately after this method returns.
+        """
 
         text = text.strip()
 
-        # Gemini may occasionally wrap JSON in ```json.
+        if not text:
+            raise QueryEnrichmentError(
+                "Gemini returned an empty response"
+            )
+
+        # Gemini may occasionally wrap JSON in a Markdown fence.
         text = re.sub(
-            r"^```(?:json)?\s*",
+            r"^```(?:json)?\\s*",
             "",
             text,
+            count=1,
             flags=re.IGNORECASE,
         )
 
         text = re.sub(
-            r"\s*```$",
+            r"\\s*```\\s*$",
             "",
             text,
+            count=1,
         )
 
-        try:
+        decoder = json.JSONDecoder()
 
-            payload = json.loads(
-                text
+        try:
+            # raw_decode accepts one complete JSON value even when
+            # the model appends non-JSON text afterwards. Unlike
+            # slicing at the last brace, nested JSON remains safe.
+            payload, _ = decoder.raw_decode(
+                text.lstrip()
             )
 
         except json.JSONDecodeError as exc:
-
             raise QueryEnrichmentError(
-                "Gemini did not return valid JSON"
+                "Gemini did not return valid JSON: "
+                f"{exc.msg} at line {exc.lineno} "
+                f"column {exc.colno}"
             ) from exc
 
         if not isinstance(
             payload,
             dict,
         ):
-
             raise QueryEnrichmentError(
                 "Gemini response must be "
                 "a JSON object"
             )
 
         return payload
+

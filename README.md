@@ -1,430 +1,825 @@
-# Smart Guided Troubleshooting Engine
+## Project Structure
 
-Turns unstructured Galaxy device complaints into validated, deeplinked troubleshooting
-plans, served from a semantic cache so that a previously-seen problem is answered without
-re-running the extraction pipeline.
+Guarded Troubleshooting follows a modular architecture that separates query understanding, troubleshooting-step extraction, deeplink retrieval, response validation, semantic caching, persistence, API delivery, evaluation, and the web interface.
 
-## Pipeline
+The repository is organized as follows:
 
+```text
+Guarded_Troubleshooting/
+├── app/
+│   ├── api/
+│   │   ├── main.py
+│   │   ├── readiness.py
+│   │   └── schemas.py
+│   │
+│   ├── cache/
+│   │   └── store.py
+│   │
+│   ├── catalog/
+│   │   ├── indexer.py
+│   │   ├── loader.py
+│   │   └── queries.py
+│   │
+│   ├── contract/
+│   │   └── schema.py
+│   │
+│   ├── db/
+│   │   ├── indexes.py
+│   │   ├── migrate.py
+│   │   ├── pool.py
+│   │   └── session.py
+│   │
+│   ├── embeddings/
+│   │   └── encoder.py
+│   │
+│   ├── pipeline/
+│   │   ├── enrichment/
+│   │   │   ├── enricher.py
+│   │   │   ├── prompts.py
+│   │   │   └── schema.py
+│   │   │
+│   │   ├── extraction/
+│   │   │   ├── extractor.py
+│   │   │   ├── prompts.py
+│   │   │   └── schema.py
+│   │   │
+│   │   ├── mock/
+│   │   │   └── mock_pipeline.py
+│   │   │
+│   │   ├── real/
+│   │   │   └── pipeline.py
+│   │   │
+│   │   └── port.py
+│   │
+│   ├── retrieval/
+│   │   └── resolver.py
+│   │
+│   ├── validation/
+│   │   └── rules.py
+│   │
+│   ├── bootstrap.py
+│   ├── config.py
+│   ├── runtime.py
+│   └── service.py
+│
+├── data/
+│   ├── official/
+│   │   ├── deeplinks.json
+│   │   ├── input.txt
+│   │   ├── sample_output.json
+│   │   ├── schema.py
+│   │   └── siis_responses.json
+│   │
+│   └── handwritten_paraphrases.json
+│
+├── db/
+│   ├── init/
+│   │   └── 01_enable_extension.sql
+│   │
+│   └── migrations/
+│       ├── 001_core_schema.sql
+│       ├── 002_official_catalog_fields.sql
+│       └── 003_cache_ambiguity.sql
+│
+├── scripts/
+│   ├── benchmark.py
+│   ├── build_catalog.py
+│   ├── init_db.py
+│   ├── prewarm_cache.py
+│   ├── reset_catalog.py
+│   └── run_api.py
+│
+├── tests/
+│   ├── cache_live.py
+│   ├── conftest.py
+│   ├── deep_link.py
+│   ├── enrichment.py
+│   ├── extraction.py
+│   ├── full_pipeline.py
+│   ├── live_pipeline.py
+│   ├── test_api.py
+│   ├── test_benchmark_helpers.py
+│   ├── test_cache.py
+│   ├── test_database_setup.py
+│   ├── test_retrieval.py
+│   └── test_validation.py
+│
+├── web/
+│   ├── app.js
+│   ├── console.css
+│   ├── console.html
+│   ├── index.html
+│   ├── landing.css
+│   ├── landing.js
+│   └── theme.css
+│
+├── .env.example
+├── docker-compose.yaml
+├── metrics.md
+├── pytest.ini
+├── requirements.txt
+├── requirements-dev.txt
+└── README.md
 ```
-Raw complaint (+ optional SIIS reference text)
-  |
-  ├─ [0] Query enrichment            ─┐
-  ├─ [1] Structure extraction (LLM)   ├─ Phase 0-2, behind PipelinePort
-  ├─ [2] Deeplink mapping & ordering ─┘
-  |
-  ├─ [3] Fast-path semantic cache     ── this repository
-  └─ [4] REST API service             ── this repository
+
+### Application Layer
+
+The `app/` directory contains the main application and is divided into independent modules for each stage of the troubleshooting system.
+
+#### `app/pipeline/`
+
+This directory contains the core troubleshooting pipeline.
+
+The pipeline converts a noisy natural-language device problem into a structured and validated troubleshooting response. It is divided into enrichment, extraction, retrieval integration, and final response construction.
+
+##### `pipeline/enrichment/`
+
+Implements the query-understanding stage of the system.
+
+- `enricher.py` — Processes the raw user query, generates a normalized representation, and produces multiple semantically related query variations for downstream retrieval and caching.
+- `prompts.py` — Contains the prompt definitions used during query enrichment.
+- `schema.py` — Defines the structured output expected from the enrichment stage.
+
+The enrichment stage is responsible for transforming potentially noisy user input into a more consistent representation while preserving the original troubleshooting intent.
+
+It also generates multiple query variations so that later components are not dependent on a single phrasing of the problem.
+
+##### `pipeline/extraction/`
+
+Handles structured troubleshooting information extraction.
+
+- `extractor.py` — Converts SIIS troubleshooting content into structured troubleshooting goals and actions.
+- `prompts.py` — Defines extraction prompts and formatting requirements.
+- `schema.py` — Defines the intermediate structured representation produced by the extraction stage.
+
+The extractor converts source troubleshooting information into individual actions that can subsequently be mapped to device settings and deeplinks.
+
+##### `pipeline/real/`
+
+Contains the production troubleshooting pipeline.
+
+- `pipeline.py` — Coordinates query enrichment, SIIS extraction, deeplink resolution, action construction, validation, and final response generation.
+
+This is the primary pipeline used when a request cannot be satisfied from the semantic cache.
+
+Conceptually, a cold request follows:
+
+```text
+User Query
+    |
+    v
+Query Enrichment
+    |
+    v
+SIIS Troubleshooting Extraction
+    |
+    v
+Action Identification
+    |
+    v
+Deeplink Retrieval
+    |
+    v
+Deterministic Verification
+    |
+    v
+Response Construction
+    |
+    v
+Validation
+    |
+    v
+Validated Troubleshooting Response
 ```
 
-All five phases are implemented. Phases 0 to 2 sit behind a single interface,
-`app/pipeline/port.py`, and are satisfied by `app/pipeline/real/pipeline.py`, which calls
-Gemini for query enrichment and structure extraction and resolves deeplinks through the
-hybrid retrieval layer. The mock that stood in during development is retained in
-`app/pipeline/mock/` for offline testing.
+##### `pipeline/mock/`
 
-## Request flow
+Contains a deterministic mock implementation of the pipeline.
 
+- `mock_pipeline.py` — Provides a pipeline implementation that can be used for controlled testing and development without depending on the complete external AI pipeline.
+
+##### `pipeline/port.py`
+
+Defines the common interface used by pipeline implementations.
+
+Keeping the pipeline behind a common interface allows the surrounding service layer to operate independently of whether the real or mock implementation is being used.
+
+---
+
+### Semantic Cache
+
+#### `app/cache/`
+
+Contains the semantic troubleshooting-plan cache.
+
+- `store.py` — Implements semantic lookup, plan storage, cache-hit tracking, ambiguity handling, and cache metrics.
+
+Instead of caching only exact strings, the cache stores vector representations of troubleshooting queries and their variations.
+
+This allows semantically equivalent requests such as:
+
+```text
+"My screen flashes and becomes blank when I open Gmail."
 ```
-POST /v1/troubleshoot
-  └─ embed query                                     ~6 ms
-     └─ semantic cache lookup (pgvector + HNSW)      ~5 ms
-        ├─ hit  → re-validate → serve                pipeline never runs
-        └─ miss → Phase 0-2 → validate → cache → serve
+
+and:
+
+```text
+"The display starts flashing and turns black whenever I read an email."
 ```
 
-A cached plan is re-validated before it is served, not only when written: validation rules
-can tighten, and a plan built against a different catalog can hold URIs that no longer
-resolve. Nothing invalid is ever served or stored.
+to potentially reuse the same validated troubleshooting plan.
 
-## Setup
+The cache uses similarity thresholds together with an ambiguity margin. A result is returned only when the closest cached plan is sufficiently similar and sufficiently distinguishable from competing plans.
 
-Requires Docker, Python 3.12, and a Gemini API key for the Phase 0-2 pipeline.
+The cache path is therefore:
+
+```text
+Incoming Query
+      |
+      v
+Embedding Generation
+      |
+      v
+Vector Similarity Search
+      |
+      +--------------------+
+      |                    |
+   Valid Hit             Cache Miss
+      |                    |
+      v                    v
+Revalidation          Real Pipeline
+      |                    |
+      v                    v
+Return Plan         Validate + Cache
+```
+
+This prevents expensive pipeline execution for troubleshooting requests that have already been solved or are semantic variations of previously solved problems.
+
+---
+
+### Deeplink Retrieval
+
+#### `app/retrieval/`
+
+Contains the deeplink resolution system.
+
+- `resolver.py` — Searches the indexed deeplink catalog and resolves troubleshooting actions to appropriate device settings destinations.
+
+The resolver combines semantic retrieval with lexical/keyword evidence rather than depending entirely on either approach.
+
+Candidate deeplinks are retrieved from the official catalog and then checked before being attached to an action.
+
+A deeplink is not generated or invented when the catalog does not contain a sufficiently appropriate destination.
+
+The retrieval process can be represented as:
+
+```text
+Troubleshooting Action
+        |
+        v
+Semantic Retrieval
+        +
+Keyword Retrieval
+        |
+        v
+Candidate Ranking
+        |
+        v
+Compatibility Verification
+        |
+        +--------------------+
+        |                    |
+    Valid Match          No Valid Match
+        |                    |
+        v                    v
+Attach Deeplink       Keep Manual Steps
+```
+
+---
+
+### Response Validation
+
+#### `app/validation/`
+
+Contains deterministic validation rules for generated troubleshooting responses.
+
+- `rules.py` — Validates response structure, action ordering, descriptions, deeplinks, steps, categories, and other contract requirements.
+
+The validation layer acts as a guard between AI-generated/intermediate content and the final API response.
+
+Among other checks, the validator ensures that:
+
+- generated responses follow the required schema;
+- goals follow the expected troubleshooting/configuration format;
+- action titles and descriptions satisfy formatting constraints;
+- troubleshooting descriptions satisfy the required word limits;
+- individual steps represent executable user interactions;
+- deeplinks originate from the permitted catalog;
+- invalid URLs are not exposed;
+- disruptive or critical actions appear after safer actions.
+
+A generated plan must pass validation before it can be stored and served as a trusted cached response.
+
+---
+
+### Embeddings
+
+#### `app/embeddings/`
+
+Contains the embedding layer used throughout the system.
+
+- `encoder.py` — Generates vector representations for queries and searchable text.
+
+Embeddings are shared by multiple components, including:
+
+- semantic cache lookup;
+- paraphrase matching;
+- deeplink retrieval;
+- catalog indexing.
+
+Using a shared embedding layer keeps semantic comparisons consistent across the application.
+
+---
+
+### Deeplink Catalog
+
+#### `app/catalog/`
+
+Handles loading, indexing, and querying of the official deeplink dataset.
+
+- `loader.py` — Reads and normalizes catalog records.
+- `indexer.py` — Generates and stores searchable catalog representations.
+- `queries.py` — Provides catalog-related database queries.
+
+The catalog is indexed into PostgreSQL so the retrieval layer can efficiently perform semantic and lexical searches.
+
+The official catalog itself remains separate from runtime-generated troubleshooting plans.
+
+---
+
+### API Layer
+
+#### `app/api/`
+
+Contains the REST interface exposed by the application.
+
+- `main.py` — Defines the FastAPI application and troubleshooting endpoints.
+- `schemas.py` — Defines API request and response models.
+- `readiness.py` — Performs health and dependency-readiness checks.
+
+The main troubleshooting endpoint passes requests through the service layer rather than directly invoking the AI pipeline.
+
+This is important because it allows every API request to benefit from semantic caching.
+
+The request flow is:
+
+```text
+REST Request
+     |
+     v
+FastAPI
+     |
+     v
+Troubleshooting Service
+     |
+     v
+Semantic Cache
+   /     \
+ Hit     Miss
+  |        |
+  |        v
+  |    Real Pipeline
+  |        |
+  +--------+
+     |
+     v
+Validation
+     |
+     v
+API Response
+```
+
+The API also exposes health and cache statistics endpoints for operational visibility.
+
+---
+
+### Service Layer
+
+#### `app/service.py`
+
+The service layer is the main orchestration boundary between the API, cache, pipeline, validator, and metrics system.
+
+For each troubleshooting request, the service:
+
+1. generates the query embedding;
+2. performs semantic cache lookup;
+3. checks similarity and ambiguity conditions;
+4. revalidates cached responses before serving them;
+5. invokes the real pipeline when no acceptable cache entry exists;
+6. validates newly generated plans;
+7. stores successful plans and query variations in the semantic cache;
+8. records latency and cache metrics;
+9. returns operational metadata with the troubleshooting response.
+
+This means the API itself does not need to understand whether a response originated from the cache or from the full pipeline.
+
+---
+
+### Bootstrap and Runtime
+
+#### `app/bootstrap.py`
+
+Constructs the major application dependencies.
+
+It connects components such as:
+
+- database pool;
+- embedding encoder;
+- catalog;
+- deeplink resolver;
+- validator;
+- pipeline;
+- semantic cache;
+- troubleshooting service.
+
+Centralizing dependency construction keeps application startup consistent between the API, tests, and scripts.
+
+#### `app/config.py`
+
+Defines runtime configuration and environment-backed settings.
+
+Configuration includes values related to:
+
+- database connectivity;
+- model configuration;
+- cache thresholds;
+- ambiguity margins;
+- cache versions;
+- vector search parameters;
+- pipeline behavior.
+
+#### `app/runtime.py`
+
+Contains runtime utilities shared by application entry points.
+
+---
+
+### Data Contract
+
+#### `app/contract/`
+
+Contains the canonical troubleshooting response schema.
+
+- `schema.py` — Defines the structured response objects used throughout the system.
+
+Keeping the response contract independent from the API allows the pipeline, validator, cache, and API to operate on the same structured representation.
+
+---
+
+### Database Layer
+
+#### `app/db/`
+
+Contains application-level PostgreSQL access.
+
+- `pool.py` — Manages asynchronous database connection pooling.
+- `session.py` — Provides database session/connection helpers.
+- `migrate.py` — Handles database migration execution.
+- `indexes.py` — Handles required database and vector indexes.
+
+PostgreSQL is used as both the persistent application database and the vector-search backend through `pgvector`.
+
+---
+
+### Database Schema and Migrations
+
+#### `db/`
+
+Contains SQL required to initialize and evolve the database.
+
+```text
+db/
+├── init/
+│   └── 01_enable_extension.sql
+└── migrations/
+    ├── 001_core_schema.sql
+    ├── 002_official_catalog_fields.sql
+    └── 003_cache_ambiguity.sql
+```
+
+`01_enable_extension.sql` enables the required PostgreSQL extension.
+
+The migrations then establish the core schema, catalog-related fields, semantic cache structures, and ambiguity-related metrics.
+
+This keeps database changes reproducible instead of requiring manual database modification.
+
+---
+
+### Official Data
+
+#### `data/official/`
+
+Contains the challenge-provided source data used by the application.
+
+- `input.txt` — Official troubleshooting input data.
+- `siis_responses.json` — SIIS troubleshooting responses used by the pipeline.
+- `deeplinks.json` — Official deeplink catalog.
+- `sample_output.json` — Example of the expected response format.
+- `schema.py` — Schema associated with the supplied dataset.
+
+These files are treated as source data. Runtime-generated cache entries are stored separately in PostgreSQL.
+
+#### `data/handwritten_paraphrases.json`
+
+Contains manually prepared semantic variations used for evaluating cache behavior across differently worded requests.
+
+This allows evaluation to distinguish between exact-string caching and genuine semantic reuse.
+
+---
+
+### Scripts
+
+#### `scripts/`
+
+Contains operational and evaluation utilities.
+
+- `init_db.py` — Initializes the database.
+- `build_catalog.py` — Loads and indexes the deeplink catalog.
+- `reset_catalog.py` — Resets/rebuilds catalog state when required.
+- `prewarm_cache.py` — Pre-populates semantic cache entries.
+- `run_api.py` — Starts the REST API.
+- `benchmark.py` — Runs system-level evaluation and produces performance measurements.
+
+These scripts keep common setup and evaluation operations reproducible.
+
+---
+
+### Tests
+
+#### `tests/`
+
+Contains unit, integration, pipeline, API, retrieval, validation, database, and cache tests.
+
+Important test groups include:
+
+- `enrichment.py` — Query-enrichment behavior.
+- `extraction.py` — Structured troubleshooting extraction.
+- `deep_link.py` — Deeplink-related behavior.
+- `full_pipeline.py` — End-to-end pipeline behavior.
+- `live_pipeline.py` — Pipeline execution against live model dependencies.
+- `cache_live.py` — Real semantic-cache latency and integration behavior.
+- `test_cache.py` — Cache correctness and edge cases.
+- `test_retrieval.py` — Deeplink retrieval behavior.
+- `test_validation.py` — Deterministic response-validation rules.
+- `test_database_setup.py` — Database and schema readiness.
+- `test_api.py` — REST API behavior and response contract.
+- `test_benchmark_helpers.py` — Benchmark utility behavior.
+- `conftest.py` — Shared pytest fixtures and test configuration.
+
+The test suite separates deterministic tests from live tests where possible so individual components can be verified independently.
+
+---
+
+### Web Interface
+
+#### `web/`
+
+Contains the browser-based interface for interacting with the troubleshooting system.
+
+- `index.html` — Main landing interface.
+- `landing.css` — Landing-page styling.
+- `landing.js` — Landing-page interaction logic.
+- `console.html` — Troubleshooting console interface.
+- `console.css` — Console-specific styling.
+- `app.js` — Frontend application and API interaction logic.
+- `theme.css` — Shared visual theme definitions.
+
+The frontend communicates with the same REST API used by external clients, keeping the user interface separated from the backend troubleshooting logic.
+
+---
+
+### Evaluation
+
+#### `metrics.md`
+
+Contains benchmark and evaluation results for the system.
+
+The evaluation layer measures areas such as:
+
+- response/schema compliance;
+- semantic cache performance;
+- cache-hit latency;
+- cache-hit rate;
+- pipeline latency;
+- deeplink validity;
+- retrieval behavior;
+- URL leakage;
+- semantic paraphrase behavior.
+
+#### `scripts/benchmark.py`
+
+Provides the corresponding benchmark runner used to evaluate these properties across the supplied dataset and paraphrase cases.
+
+---
+
+### Environment and Dependencies
+
+#### `.env.example`
+
+Documents the environment variables required to configure the application without committing credentials to the repository.
+
+#### `requirements.txt`
+
+Contains the Python dependencies required to run the application.
+
+#### `requirements-dev.txt`
+
+Contains additional dependencies used during development and testing.
+
+#### `docker-compose.yaml`
+
+Defines the containerized PostgreSQL/pgvector database environment used by the project.
+
+#### `pytest.ini`
+
+Contains pytest configuration used by the automated test suite.
+
+---
+
+## System Architecture
+
+At a high level, Guarded Troubleshooting combines an AI-based troubleshooting pipeline with deterministic validation, catalog-grounded deeplink retrieval, and semantic caching.
+
+```text
+                         User Query
+                             |
+                             v
+                     REST API / Web UI
+                             |
+                             v
+                  Troubleshooting Service
+                             |
+                             v
+                    Query Embedding
+                             |
+                             v
+                    Semantic Cache
+                      /           \
+                 Cache Hit      Cache Miss
+                    |               |
+                    |               v
+                    |        Query Enrichment
+                    |               |
+                    |               v
+                    |        SIIS Extraction
+                    |               |
+                    |               v
+                    |       Deeplink Retrieval
+                    |               |
+                    |               v
+                    |      Response Construction
+                    |               |
+                    |               v
+                    |          Validation
+                    |               |
+                    |               v
+                    |         Cache Storage
+                    |               |
+                    +-------+-------+
+                            |
+                            v
+                     Final Validation
+                            |
+                            v
+                       API Response
+```
+
+The architecture is designed so that expensive processing occurs only when necessary. Once a validated troubleshooting plan has been generated, semantically similar future requests can reuse it through the vector cache while still passing through deterministic validation before being returned.
+
+This separation also ensures that AI-generated content does not directly control deeplinks or bypass the response contract. Deeplink candidates originate from the indexed catalog, generated plans are checked against deterministic rules, and only validated responses are returned to the client.
+
+## Getting Started
+
+### Prerequisites
+
+Make sure the following are installed:
+
+- Python 3.12+
+- Docker and Docker Compose
+- Git
+
+### 1. Clone the Repository
 
 ```bash
+git clone https://github.com/Dhanush-Poduval/Guarded_Troubleshooting.git
+cd Guarded_Troubleshooting
+```
+
+### 2. Create a Virtual Environment
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+
 pip install -r requirements-dev.txt
+```
+
+### 4. Configure Environment Variables
+
+Create the environment file from the provided example:
+
+```bash
 cp .env.example .env
-# Set GEMINI_API_KEY in .env before continuing: Phase 0-2 calls Gemini and the
-# service will not start without it. Key from https://aistudio.google.com/apikey
+```
+
+Open `.env` and provide the required configuration values, including the Gemini API key.
+
+### 5. Start PostgreSQL + pgvector
+
+```bash
 docker compose up -d
-python -m scripts.init_db          # create schema
-python -m scripts.build_catalog    # embed the 578-entry deeplink catalog
-python -m scripts.prewarm_cache    # cache a plan per canonical query
-python -m scripts.run_api          # http://127.0.0.1:8000
 ```
 
-That one process serves both the API and the web client, so there is nothing else to
-start: open <http://127.0.0.1:8000> for the UI and
-<http://127.0.0.1:8000/docs> for the API.
-
-`python -m scripts.run_api` is the supported entry point. Running uvicorn directly works
-too, but the loop must be selected explicitly:
+Verify that the database container is running:
 
 ```bash
-uvicorn app.api.main:app --loop asyncio
+docker compose ps
 ```
 
-**On Windows this is not optional.** psycopg's async mode cannot run on the default
-Proactor event loop, and the failure surfaces as a pool timeout that looks like a database
-outage rather than a loop mismatch.
-
-## Endpoints
-
-| Method | Path | Purpose |
-| :--- | :--- | :--- |
-| POST | `/v1/troubleshoot` | Process a complaint, return an actionable plan |
-| POST | `/troubleshoot` | Unversioned alias for the above |
-| GET | `/health` | Readiness: 200 only when pool, model, indexes and catalog are live |
-| GET | `/cache/stats` | Measured hit rate, latency percentiles, rejection reasons |
-| GET | `/v1/examples` | The official complaints and their SIIS text, for the web client |
-| POST | `/v1/resolution/sessions` | Open a guided resolution session on a validated plan |
-| GET | `/v1/resolution/sessions/{id}` | Current session state and attempt history |
-| POST | `/v1/resolution/sessions/{id}/presented` | Record that the action was shown or opened |
-| POST | `/v1/resolution/sessions/{id}/verify` | Attempt automatic verification through the adapter |
-| POST | `/v1/resolution/sessions/{id}/observations` | Submit a value the user read (client-reported) |
-| POST | `/v1/resolution/sessions/{id}/confirm` | Record the user's own account of the outcome |
-| POST | `/v1/resolution/sessions/{id}/advance` | Move to the next action already in the plan |
-| POST | `/v1/resolution/sessions/{id}/complete` | Finish or abandon the session |
-| GET | `/v1/resolution/sessions/{id}/receipt` | The record a finished session leaves behind |
-| GET | `/` | The web client (served from `web/`, omitted if the directory is absent) |
+### 6. Initialize the Database
 
 ```bash
-curl -X POST http://127.0.0.1:8000/v1/troubleshoot \
-  -H 'Content-Type: application/json' \
-  -d '{"query": "My Galaxy S24 Ultra screen is completely black and will not turn on"}'
+python -m scripts.init_db
 ```
 
-`siis_response` is optional and accepts either a raw string or the `{title, content}`
-object the dataset ships.
-
-`/health` is a readiness check rather than a liveness stub: a process that is listening but
-whose HNSW index has not been built serves nothing, so it returns 503 naming the component
-that is not ready.
-
-## Verified resolution loop
-
-Generating a plan answers "what should I try". It does not answer "did it work". The
-resolution loop closes that gap:
-
-```
-complaint
-  -> validated plan
-  -> present one action, with its catalog deeplink
-  -> user performs it
-  -> check the resulting device state against the action's own validation contract
-       verified   -> finish, and issue a receipt
-       failed     -> offer the next action already in the validated plan
-       unavailable-> fall back to clearly labelled user confirmation
-```
-
-The loop never invents a step. When verification fails it advances to the next step group
-already present in the plan the user is walking; when the plan runs out the session ends
-`unresolved`, which is a truthful outcome rather than a fabricated next move.
-
-### What `system_verified` is allowed to mean
-
-This is the constraint the whole feature is built around.
-
-The catalog ships masked `bixby://` URIs, and the console is a desktop web page with no
-channel to a Galaxy handset. **This deployment cannot read device state.** So:
-
-* A `DeviceVerificationAdapter` is the only thing that can produce trusted evidence, and
-  the adapter wired in production is `UnavailableAdapter`, which reads nothing and says
-  so. Every automatic check therefore reports `verification_unavailable`.
-* Clicking a deeplink copies it, exactly as before, and records that the action was
-  *presented*. It moves no verification status. A click is not evidence about a device.
-* A value the user types is recorded as `client_reported`. Even when it satisfies the
-  contract, the result is `inconclusive`, never `system_verified` — the server did not
-  obtain the value and cannot vouch for it.
-* The user's own account is a first-class outcome, recorded as `user_confirmed` and
-  labelled that way everywhere it appears.
-
-The rule is enforced three times over: the comparator demotes a satisfied comparison that
-carries untrusted evidence, the service assigns provenance by code path rather than from
-the request body, and a `CHECK` constraint in `resolution_attempt` refuses to store
-`system_verified` against any source other than `trusted_adapter`.
-
-### Verification is deterministic
-
-No language model takes part in deciding whether a check passed. `app/verification/
-comparator.py` is a pure function over (contract, observation).
-
-Automatic verification is attempted only when the step's `validationDeeplink` carries a
-**complete** contract: `deeplink`, `key`, `resultType`, `condition` and `value`. Only 138
-of the 578 catalog entries do. A partial contract returns `verification_unavailable`
-rather than a guess at the missing half.
-
-| Result type | `equal` | `greater` / `less` |
-| :--- | :--- | :--- |
-| `boolean` | yes | rejected — ordering booleans has no agreed meaning |
-| `integer` | yes | yes |
-| `float` | yes | yes |
-| `str` | yes, case-insensitive on trimmed text | rejected |
-
-Anything that cannot be decided safely is `inconclusive` with a reason code, never
-coerced: `"maybe"` does not become `False`, `"1.5"` is not an integer, `nan` and `inf` are
-refused, and a reading for a different `key` proves nothing about the expected one.
-
-### States
-
-```
-pending ──presented/evidence──> in_progress ──┬── confirm(resolved) ─────> resolved
-                                              ├── complete(status) ──────> resolved
-                                              │                            unresolved
-                                              │                            inconclusive
-                                              ├── advance past last step ─> unresolved
-                                              └── complete(abandoned) ───> abandoned
-```
-
-`resolved`, `unresolved`, `inconclusive` and `abandoned` are terminal; a terminal session
-rejects every further call with `409`. Verification status moves independently through
-`pending`, `system_verified`, `user_confirmed`, `verification_failed`,
-`verification_unavailable` and `inconclusive`, and resets to `pending` on each advance so
-one action's verdict is never inherited by the next.
-
-A `critical` action — a forced restart, a reset, a service visit — is not presented until
-the client advances with `acknowledge_critical: true`. Without it the advance is refused.
-
-### Sessions are stored apart from the plan cache
-
-A cached plan is shared by every request whose wording matches it, so writing one user's
-progress into it would leak that progress to the next user. Each session therefore holds
-its own immutable `plan_snapshot`, validated at session start. The cache may be re-warmed
-or purged underneath a session without changing what it already asked the user to do.
-
-Two tables, added by `db/migrations/004_resolution_sessions.sql`:
-
-* `resolution_session` — the snapshot, the cursor (goal / action / step-group index),
-  session and verification status, reason code, critical acknowledgement and timestamps.
-* `resolution_attempt` — append-only history. A retry adds a row rather than overwriting
-  the previous reading, and `observation_token` is unique per session so a client retrying
-  after a timeout gets back the attempt its first call recorded.
-
-### API example
+### 7. Build the Deeplink Catalog
 
 ```bash
-# 1. Open a session on a plan /v1/troubleshoot already returned.
-#    The plan is re-validated here: one carrying a URI the catalog does not authorise
-#    is refused with 422 and never becomes a session.
-curl -X POST http://127.0.0.1:8000/v1/resolution/sessions \
-  -H 'Content-Type: application/json' \
-  -d '{"query": "My Galaxy S24 screen is black", "plan": { "contexts": [ ... ] }}'
-
-# 2. The user opened the deeplink. This records presentation only.
-curl -X POST http://127.0.0.1:8000/v1/resolution/sessions/$SID/presented
-
-# 3. Ask the server to read the setting back. Unavailable in this deployment.
-curl -X POST http://127.0.0.1:8000/v1/resolution/sessions/$SID/verify
-
-# 4. Or let the user report what they see. Always client-reported.
-curl -X POST http://127.0.0.1:8000/v1/resolution/sessions/$SID/observations \
-  -H 'Content-Type: application/json' \
-  -d '{"observed_value": "True", "observation_token": "f3c1-once"}'
-
-# 5. Not fixed? Move to the next action already in the plan.
-curl -X POST http://127.0.0.1:8000/v1/resolution/sessions/$SID/advance \
-  -H 'Content-Type: application/json' -d '{"acknowledge_critical": false}'
+python -m scripts.build_catalog
 ```
 
-Note the absence of a deeplink field in every request. Each URI the user sees is read from
-the session's stored snapshot at the session's own cursor, so a client can ask to move
-forward but cannot name where it moves to.
+### 8. Start the Application
 
-### Receipt
+```bash
+python -m scripts.run_api
+```
 
-A finished session leaves a record. `verification_method` is the field to read first.
+The application will start at:
+
+```text
+http://127.0.0.1:8000
+```
+
+The same server provides both the REST API and the web interface, so a separate frontend server is not required.
+
+### 9. Verify System Readiness
+
+In another terminal:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+A ready system should report:
 
 ```json
 {
-  "session_id": "2b5d1b9f-aaf6-4258-84d8-52efc9e7ab9f",
-  "query": "My Galaxy S24 Ultra screen is completely black and won't turn on",
-  "final_status": "resolved",
-  "verification_method": "user_confirmed",
-  "system_verified": false,
-  "actions_attempted": 1,
-  "successful_action": "Charge Device",
-  "expected_state": "not applicable",
-  "observed_state": null,
-  "completed_at": "2026-10-03T19:36:47Z",
-  "caveat": "This outcome rests on the user's own report. The server did not read the
-             device state back, so it is not a system verification."
+  "status": "ok",
+  "database": true,
+  "embedding_model": true,
+  "vector_indexes": true,
+  "catalog_indexed": true,
+  "cache_ready": true
 }
 ```
 
-A system-verified receipt carries `"system_verified": true`, the expected and observed
-states, and no caveat. The console renders the two as visually different objects — a green
-card against a violet one — so one cannot be skim-read as the other.
+Then open:
 
-### Connecting a real Galaxy-side adapter
-
-Implement the `DeviceVerificationAdapter` protocol in `app/verification/adapter.py`:
-
-```python
-class GalaxyBridgeAdapter:
-    name = "galaxy_bridge"
-
-    async def read_state(self, *, deeplink: str, key: str) -> AdapterReading:
-        ...  # return AdapterReading.read(value), or AdapterReading.unavailable(reason)
+```text
+http://127.0.0.1:8000/
 ```
 
-then inject it where the service is constructed in `app/api/main.py`:
+in your browser to use the troubleshooting interface.
 
-```python
-app.state.resolution = ResolutionService(
-    pool=pool,
-    permitted_deeplinks=app.state.service.permitted_deeplinks,
-    adapter=GalaxyBridgeAdapter(),
-)
-```
-
-Nothing else changes. The comparator, the state machine, the API and the console all
-depend on the interface rather than on a device, and `automatic_verification_possible`
-flips to true in the session view the moment a reading adapter is present.
-
-**The one rule an implementation must honour:** return a reading only when one was
-actually obtained. Returning a plausible value when the device could not be reached
-converts an honest "unavailable" into a false "verified", which is the single failure this
-whole boundary exists to prevent.
-
-## Web client
-
-`web/` holds a two-page client that the API mounts at `/`. There is no build step, no
-package manifest and no CDN dependency: plain HTML, CSS and JavaScript served by the same
-uvicorn process, so the whole system is one command and works with no network access.
-
-`/` is an overview of what the engine does and how it is built, ending in the measured
-results including the two targets that are missed. Its cache figures are read live from
-`/cache/stats` on the running instance rather than written into the page. The sample
-request is fired only when the visitor asks for it, because a complaint the cache cannot
-answer runs the full pipeline and costs a paid model call.
-
-`/console.html` is the working client. A complaint goes in, and the plan comes back
-rendered as goals, numbered actions carrying their `auto` / `manual` / `critical` category,
-and step groups whose deeplinks appear as buttons. A `bixby://` URI does not resolve in a
-desktop browser, so clicking a deeplink copies it and states what it would do on-device
-rather than pretending to navigate.
-
-Beside it sits the evidence panel, and every value in it comes from the `meta` block of the
-response rather than being computed in the browser: cache hit or miss with the cosine
-similarity that decided it, the end-to-end latency split into embed, cache lookup and
-pipeline, the model actually called, the cost, and the fallback reason when there is one.
-
-Two details are there for the sake of an honest demo. **Ask again** re-sends the identical
-complaint, which turns the previous miss into a cache hit and shows the latency collapse
-directly. The reference-text panel can be emptied, which makes the engine answer
-`no_siis_context` with no plan -- the specified behaviour, since steps are only ever derived
-from supplied text and never invented.
-
-Pick a complaint from the dropdown to load a real record from the participant kit; the
-list is served by `/v1/examples` so the client never carries its own copy of the dataset.
-
-Once a plan is on screen, **Start guided resolution** opens the verified resolution loop
-described above. It shows one action at a time with its category and deeplink, states
-plainly whether an automatic check is possible for that step, and offers the choice
-between entering an observed value and confirming the outcome yourself. The status banner
-and the receipt use one fixed vocabulary -- System verified, User confirmed, Verification
-failed, Verification unavailable, Inconclusive -- and the page never shows "resolved"
-because a deeplink was clicked.
-
-Stylesheet and script links carry a `?v=` suffix. Without it a browser that has cached an
-earlier deployment keeps serving the old asset after an update, which is how a stale
-stylesheet silently hid a fixed layout bug during development.
-
-## Layout
-
-```
-app/api/           FastAPI routes, request/response models, readiness probe
-app/service.py     cache-first request flow
-app/cache/         semantic cache: lookup, write, metrics, stats
-app/retrieval/     hybrid deeplink retrieval (dense + BM25 fused by weighted RRF)
-app/embeddings/    fastembed encoder (ONNX Runtime, no torch)
-app/catalog/       catalog and query-set loading, embedding, indexing
-app/validation/    deterministic contract validation
-app/verification/  typed comparator, device adapter boundary, test-only fake
-app/resolution/    guided resolution sessions: state machine and persistence
-app/contract/      the data contract shipped with the dataset
-app/pipeline/      Phase 0-2 port, plus the temporary mock behind it
-db/migrations/     schema, applied in order by scripts.init_db
-data/official/     the participant kit, unmodified
-web/               the demo client, served by the same process as the API
-```
-
-## Key choices
-
-**Embeddings: `BAAI/bge-small-en-v1.5` via fastembed.** 384-dimensional, MIT licensed,
-67 MB, around 3 ms per query on CPU. fastembed runs it on ONNX Runtime rather than
-PyTorch, which matters because each API worker holds its own copy of the model.
-
-**Retrieval: dense vector search fused with BM25 by weighted Reciprocal Rank Fusion.** The
-two fail differently. Dense search bridges vocabulary gaps, matching "blue light filter" to
-Samsung's "Eye Comfort Shield"; BM25 anchors exact terminology. Their scores are on
-incompatible scales, so they are merged by rank rather than by score.
-
-**The cache requires a margin, not just a threshold.** Every query in the dataset concerns
-the screen, so two genuinely different problems can be worded almost identically:
-similarity between distinct problems reaches 0.8742. A threshold alone would pick
-arbitrarily between them, so the best-matching plan must also beat the runner-up plan by a
-configurable margin. A near-tie is treated as a miss and answered by the pipeline, because
-a slow answer is better than a wrong one.
-
-**Every phrasing of a plan is indexed, not just one key.** A reworded query is often closer
-to a stored paraphrase than to the canonical form. Measured on held-out rewordings, one
-moved from 0.6909 against the canonical query, which is a miss, to 0.8200 against a stored
-paraphrase, which is a hit.
-
-**PostgreSQL is the system of record.** Plan JSON, validation state, the catalog and the
-embeddings stay mutually consistent in one transactional store. HNSW is in place for growth
-and concurrency; at the current corpus size PostgreSQL chooses a sequential scan anyway, so
-the fast-path latency comes from skipping the pipeline, not from the index.
-
-## Tests and benchmarks
+### Optional: Run Tests
 
 ```bash
-python -m pytest tests/ -q      # requires the database to be up
-python -m scripts.benchmark     # writes metrics.md
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+python -m pytest \
+-p pytest_asyncio.plugin \
+--ignore=tests/cache_live.py \
+-v
 ```
 
-Database-backed tests skip rather than fail when PostgreSQL is unreachable, so work on
-other phases is never blocked by a container.
+## Submission Resources
 
-`metrics.md` is generated, never hand-edited. Figures it cannot measure honestly, such as
-step accuracy against reference plans that do not exist yet, are written as "not measured"
-with the reason rather than filled in.
-
-### Resolution-loop tests
-
-```bash
-pytest tests/test_verification.py   # pure comparator: no database, no device, no model
-pytest tests/test_resolution.py     # session machine and persistence, real database
-pytest tests/test_resolution_api.py # the HTTP surface, in-process over ASGI
-```
-
-The trusted-evidence path is exercised with `FakeTrustedAdapter`, which returns only
-readings a test seeded. It is never selected by `app/bootstrap.py` and is unreachable from
-configuration, so the only way to obtain it is to construct it in a test.
-
-## Configuration
-
-All settings live in `app/config.py` and can be overridden through `.env`; see
-`.env.example`. The ones most worth knowing:
-
-| Variable | Default | Notes |
-| :--- | :--- | :--- |
-| `CACHE_SIMILARITY_THRESHOLD` | 0.78 | Minimum similarity for a cache hit |
-| `CACHE_AMBIGUITY_MARGIN` | 0.05 | Required gap to the runner-up plan |
-| `CACHE_VERSION` | 1 | Bumping it invalidates every cached plan at once |
-| `DESCRIPTION_MAX_WORDS` | 15 | Follows the official sample, which exceeds the prose rule |
-| `HNSW_M`, `HNSW_EF_CONSTRUCTION` | 16, 64 | Index build parameters |
-| `HNSW_EF_SEARCH_CATALOG` | 100 | Higher than the cache: a miss here costs quality |
-| `GEMINI_API_KEY` | _(required)_ | Phase 0-2 enrichment and extraction |
-
-## Replacing the catalog
-
-Cached plans embed URIs copied from whichever catalog was loaded when they were written, so
-a catalog change requires a purge rather than a migration:
-
-```bash
-python -m scripts.reset_catalog --yes   # dry run without --yes
-python -m scripts.build_catalog
-python -m scripts.prewarm_cache
-```
+- Presentation: [View Presentation](./presentation/Smart_Guided_Troubleshooting_Final_Submission_filled.pptx)
+- Demo Video: [Watch Demo Video](https://drive.google.com/file/d/1tVMslTQtBKIP-qObZXfjxNKbqdIfXCeE/view?usp=sharing)
+- Ai Disclosure: [View Disclosure](./ai_disclosure/LangAI3.0_AI_Disclosure.docx)
