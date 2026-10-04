@@ -1,16 +1,513 @@
+# Guarded Troubleshooting
+
+**Smart Guided Troubleshooting with Semantic Caching, Deeplink Resolution, and Verified Resolution**
+
+Guarded Troubleshooting is an AI-assisted troubleshooting platform that transforms noisy natural-language device complaints into structured, validated, and actionable troubleshooting plans.
+
+The system combines query enrichment, SIIS-grounded troubleshooting extraction, catalog-backed deeplink retrieval, deterministic validation, semantic caching, and a guided resolution workflow.
+
+Beyond generating troubleshooting steps, the platform can guide a user through a validated plan one action at a time, track progress, verify expected device state when trusted evidence is available, distinguish system verification from user confirmation, protect critical actions, and generate a final resolution receipt.
+
+---
+
+## Core Features
+
+- **Query Enrichment** — Normalizes noisy user complaints and generates semantic query variations.
+- **SIIS-Grounded Extraction** — Converts troubleshooting source information into structured goals and actions.
+- **Catalog-Grounded Deeplinks** — Maps troubleshooting actions to official device settings destinations without inventing URIs.
+- **Deterministic Validation** — Enforces schema, formatting, deeplink integrity, action ordering, and safety requirements.
+- **Semantic Cache** — Reuses validated plans for semantically similar queries and bypasses expensive pipeline execution on valid hits.
+- **Guided Resolution** — Walks users through a validated troubleshooting plan one action at a time.
+- **Task Verification** — Compares expected and observed device state using deterministic verification rules.
+- **Evidence Provenance** — Distinguishes trusted system evidence, client-reported observations, and user confirmation.
+- **Critical Action Protection** — Requires explicit acknowledgement before disruptive troubleshooting actions.
+- **Resolution Receipts** — Records the final outcome, attempted actions, verification method, and available evidence.
+- **REST API and Web UI** — FastAPI serves both the application API and browser interface.
+- **PostgreSQL and pgvector** — Provides persistence, vector search, semantic caching, and guided-session storage.
+
+---
+
+## System Architecture
+
+```text
+                              User Query
+                                  |
+                                  v
+                         REST API / Web UI
+                                  |
+                                  v
+                       Troubleshooting Service
+                                  |
+                                  v
+                         Query Embedding
+                                  |
+                                  v
+                         Semantic Cache
+                           /           \
+                      Cache Hit       Cache Miss
+                         |               |
+                         |               v
+                         |        Query Enrichment
+                         |               |
+                         |               v
+                         |         SIIS Extraction
+                         |               |
+                         |               v
+                         |        Deeplink Retrieval
+                         |               |
+                         |               v
+                         |      Response Construction
+                         |               |
+                         |               v
+                         |          Validation
+                         |               |
+                         +-------+-------+
+                                 |
+                                 v
+                     Validated Troubleshooting Plan
+                                 |
+                                 v
+                       Guided Resolution Session
+                                 |
+                  +--------------+--------------+
+                  |                             |
+           Expected State                Perform Action
+                  |                             |
+                  |                             v
+                  |                   Verify / Observe /
+                  |                        Confirm
+                  |                             |
+                  +-------------+---------------+
+                                |
+                                v
+                     Deterministic Comparator
+                                |
+               +----------------+----------------+
+               |                |                |
+        System Verified   User Confirmed    Failed /
+                                           Inconclusive
+               |                |                |
+               +----------------+----------------+
+                                |
+                                v
+                        Resolution Receipt
+```
+
+The AI pipeline helps understand and structure troubleshooting information, but it does not control the system's trust boundary.
+
+Deeplinks originate from the official catalog, generated plans pass deterministic validation, and only trusted device-adapter evidence can result in a `system_verified` outcome.
+
+---
+
+## Troubleshooting Pipeline
+
+A cache miss enters the complete troubleshooting pipeline:
+
+```text
+User Query
+    |
+    v
+Query Enrichment
+    |
+    v
+SIIS Troubleshooting Extraction
+    |
+    v
+Action Identification
+    |
+    v
+Deeplink Retrieval
+    |
+    v
+Deterministic Verification
+    |
+    v
+Response Construction
+    |
+    v
+Validation
+    |
+    v
+Validated Troubleshooting Response
+```
+
+### Query Enrichment
+
+The enrichment stage converts noisy user input into a normalized representation while preserving the original troubleshooting intent.
+
+It also generates multiple semantic variations so later components are not dependent on a single phrasing of the problem.
+
+The enrichment layer is implemented under:
+
+```text
+app/pipeline/enrichment/
+```
+
+It contains:
+
+- `enricher.py` — performs query enrichment and model interaction.
+- `prompts.py` — contains enrichment prompt definitions.
+- `schema.py` — defines the structured enrichment output.
+
+---
+
+### SIIS Extraction
+
+Troubleshooting source information is converted into structured goals and actions.
+
+The extraction stage identifies information such as:
+
+- troubleshooting goal;
+- action names;
+- descriptions;
+- individual interaction steps;
+- action categories.
+
+The extraction layer is located under:
+
+```text
+app/pipeline/extraction/
+```
+
+It contains:
+
+- `extractor.py` — performs structured troubleshooting extraction.
+- `prompts.py` — contains extraction prompts.
+- `schema.py` — defines the intermediate extraction structure.
+
+---
+
+### Deeplink Resolution
+
+Troubleshooting actions are mapped against the official deeplink catalog using semantic and lexical retrieval.
+
+The retrieval process is:
+
+```text
+Troubleshooting Action
+        |
+        v
+Semantic Retrieval
+        +
+Keyword Retrieval
+        |
+        v
+Candidate Ranking
+        |
+        v
+Compatibility Verification
+        |
+        +--------------------+
+        |                    |
+    Valid Match          No Valid Match
+        |                    |
+        v                    v
+Attach Deeplink       Keep Manual Steps
+```
+
+Candidates are verified before being attached to actions.
+
+If no sufficiently appropriate catalog entry exists, the system does not invent a deeplink.
+
+---
+
+### Response Validation
+
+Before a response can be served or cached, deterministic rules validate the generated troubleshooting plan.
+
+Validation includes:
+
+- response structure;
+- troubleshooting goal format;
+- action names;
+- descriptions;
+- individual interaction steps;
+- action categories;
+- deeplink integrity;
+- URL leakage;
+- critical-action ordering.
+
+Only validated responses can be stored and reused as trusted troubleshooting plans.
+
+---
+
+## Semantic Cache
+
+Instead of caching only exact strings, Guarded Troubleshooting stores semantic vector representations of queries and their variations.
+
+For example:
+
+```text
+"My screen flashes and becomes blank when I open Gmail."
+```
+
+and:
+
+```text
+"The display starts flashing and turns black whenever I read an email."
+```
+
+may resolve to the same validated troubleshooting plan.
+
+The cache workflow is:
+
+```text
+Incoming Query
+      |
+      v
+Embedding Generation
+      |
+      v
+Vector Similarity Search
+      |
+      +----------------------+
+      |                      |
+   Valid Hit              Cache Miss
+      |                      |
+      v                      v
+Revalidation            Real Pipeline
+      |                      |
+      v                      v
+Return Plan          Validate + Cache
+```
+
+Cache entries must satisfy both similarity and ambiguity requirements.
+
+Cached responses are revalidated before being returned.
+
+This allows repeated or semantically equivalent troubleshooting requests to avoid unnecessary AI pipeline execution.
+
+---
+
+## Guided Resolution and Verification
+
+The guided resolution system extends the original troubleshooting pipeline.
+
+A user first receives a validated troubleshooting plan through:
+
+```text
+POST /v1/troubleshoot
+```
+
+A guided resolution session can then be created from that plan.
+
+```text
+Validated Plan
+     |
+     v
+Start Resolution Session
+     |
+     v
+Present Current Action
+     |
+     v
+User Performs Action
+     |
+     v
+Check Expected State
+     |
+     +--------------------------+
+     |                          |
+Trusted Adapter          User Observation /
+     |                    User Confirmation
+     v                          |
+System Verification            v
+                         Explicitly Labelled
+                           User Evidence
+```
+
+Each resolution session maintains its own plan snapshot and progress cursor.
+
+This separates individual user progress from troubleshooting plans stored in the shared semantic cache.
+
+---
+
+## Verification Model
+
+The verification system deliberately distinguishes between different levels and sources of evidence.
+
+### System Verification
+
+A result can become:
+
+```text
+system_verified
+```
+
+only when the observed value was obtained through a trusted adapter and satisfies the expected validation contract.
+
+The client cannot declare its own evidence trusted.
+
+This prevents the application from claiming that it independently verified a device state when it did not.
+
+---
+
+### User Observation
+
+A user may manually provide an observed device value.
+
+For example:
+
+```text
+Expected: Wi-Fi = True
+Observed: True
+```
+
+This evidence is recorded as:
+
+```text
+client_reported
+```
+
+Even if the reported value matches the expected state, client-reported evidence does not automatically become `system_verified`.
+
+---
+
+### User Confirmation
+
+The user can directly confirm whether the troubleshooting process solved the problem.
+
+A successful user confirmation produces:
+
+```text
+user_confirmed
+```
+
+rather than claiming that the server independently verified the device state.
+
+This distinction is retained in the final resolution receipt.
+
+---
+
+## Verification Outcomes
+
+The resolution system distinguishes between outcomes such as:
+
+```text
+pending
+system_verified
+user_confirmed
+verification_failed
+verification_unavailable
+inconclusive
+```
+
+This prevents the application from overstating what it knows about the device.
+
+---
+
+## Trusted Adapter Boundary
+
+The production application does not assume that it has access to device state.
+
+If no trusted device-state channel is available, automatic verification reports that verification is unavailable instead of fabricating a successful result.
+
+Tests use a deterministic fake trusted adapter to exercise the system-verification path.
+
+Only catalog entries containing a sufficiently complete validation contract can support automatic verification.
+
+A validation contract can contain:
+
+```text
+key
+resultType
+condition
+value
+```
+
+The deterministic comparator evaluates observed state against this expected contract.
+
+---
+
+## Critical Action Protection
+
+Some troubleshooting actions may be disruptive.
+
+Before a resolution session advances into a critical action, the user must explicitly acknowledge it.
+
+```text
+Normal Action
+     |
+     v
+Next Action Critical?
+     |
+    Yes
+     |
+     v
+Require User Acknowledgement
+     |
+     v
+Present Critical Action
+```
+
+This prevents disruptive troubleshooting actions from being entered silently.
+
+---
+
+## Resolution Receipts
+
+Completed sessions can generate a resolution receipt.
+
+A receipt can contain information such as:
+
+- final session status;
+- verification status;
+- verification method;
+- actions attempted;
+- successful action;
+- expected state;
+- observed state;
+- verification attempts;
+- completion time.
+
+Most importantly, the receipt distinguishes:
+
+```text
+system_verified
+```
+
+from:
+
+```text
+user_confirmed
+```
+
+A user-confirmed result therefore cannot be mistaken for a device state independently verified by the system.
+
+---
+
+## Resolution API
+
+The guided-resolution workflow is exposed through the following endpoints:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/v1/resolution/sessions` | Start a guided resolution session |
+| `GET` | `/v1/resolution/sessions/{id}` | Get the current session state |
+| `POST` | `/v1/resolution/sessions/{id}/presented` | Record that the current action was presented |
+| `POST` | `/v1/resolution/sessions/{id}/verify` | Attempt trusted automatic verification |
+| `POST` | `/v1/resolution/sessions/{id}/observations` | Submit a user-observed value |
+| `POST` | `/v1/resolution/sessions/{id}/confirm` | Record whether the user says the issue is resolved |
+| `POST` | `/v1/resolution/sessions/{id}/advance` | Advance to the next validated action |
+| `POST` | `/v1/resolution/sessions/{id}/complete` | Complete the resolution session |
+| `GET` | `/v1/resolution/sessions/{id}/receipt` | Retrieve the final resolution receipt |
+
+Observation requests can include an idempotency token so retried requests do not accidentally create duplicate verification attempts.
+
+---
+
 ## Project Structure
-
-Guarded Troubleshooting follows a modular architecture that separates query understanding, troubleshooting-step extraction, deeplink retrieval, response validation, semantic caching, persistence, API delivery, evaluation, and the web interface.
-
-The repository is organized as follows:
 
 ```text
 Guarded_Troubleshooting/
+│
 ├── app/
 │   ├── api/
 │   │   ├── main.py
 │   │   ├── readiness.py
-│   │   └── schemas.py
+│   │   ├── schemas.py
+│   │   ├── resolution_routes.py
+│   │   └── resolution_schemas.py
 │   │
 │   ├── cache/
 │   │   └── store.py
@@ -51,11 +548,21 @@ Guarded_Troubleshooting/
 │   │   │
 │   │   └── port.py
 │   │
+│   ├── resolution/
+│   │   ├── models.py
+│   │   ├── service.py
+│   │   └── store.py
+│   │
 │   ├── retrieval/
 │   │   └── resolver.py
 │   │
 │   ├── validation/
 │   │   └── rules.py
+│   │
+│   ├── verification/
+│   │   ├── adapter.py
+│   │   ├── comparator.py
+│   │   └── fake.py
 │   │
 │   ├── bootstrap.py
 │   ├── config.py
@@ -79,9 +586,11 @@ Guarded_Troubleshooting/
 │   └── migrations/
 │       ├── 001_core_schema.sql
 │       ├── 002_official_catalog_fields.sql
-│       └── 003_cache_ambiguity.sql
+│       ├── 003_cache_ambiguity.sql
+│       └── 004_resolution_sessions.sql
 │
 ├── scripts/
+│   ├── audit_auto_deeplinks.py
 │   ├── benchmark.py
 │   ├── build_catalog.py
 │   ├── init_db.py
@@ -91,613 +600,209 @@ Guarded_Troubleshooting/
 │
 ├── tests/
 │   ├── cache_live.py
-│   ├── conftest.py
-│   ├── deep_link.py
 │   ├── enrichment.py
 │   ├── extraction.py
 │   ├── full_pipeline.py
 │   ├── live_pipeline.py
 │   ├── test_api.py
-│   ├── test_benchmark_helpers.py
+│   ├── test_auto_deeplink_invariant.py
 │   ├── test_cache.py
 │   ├── test_database_setup.py
+│   ├── test_resolution.py
+│   ├── test_resolution_api.py
 │   ├── test_retrieval.py
-│   └── test_validation.py
+│   ├── test_validation.py
+│   └── test_verification.py
 │
 ├── web/
 │   ├── app.js
-│   ├── console.css
+│   ├── resolution.js
 │   ├── console.html
+│   ├── console.css
 │   ├── index.html
-│   ├── landing.css
 │   ├── landing.js
+│   ├── landing.css
 │   └── theme.css
+│
+├── presentation/
+│   └── Smart_Guided_Troubleshooting_Final_Submission_filled.pptx
+│
+├── ai_disclosure/
+│   └── LangAI3.0_AI_Disclosure.docx
 │
 ├── .env.example
 ├── docker-compose.yaml
 ├── metrics.md
+├── metrics_prewarmed.md
 ├── pytest.ini
 ├── requirements.txt
 ├── requirements-dev.txt
 └── README.md
 ```
 
-### Application Layer
+---
 
-The `app/` directory contains the main application and is divided into independent modules for each stage of the troubleshooting system.
+## Major Components
 
-#### `app/pipeline/`
+### Troubleshooting Pipeline
 
-This directory contains the core troubleshooting pipeline.
+`app/pipeline/`
 
-The pipeline converts a noisy natural-language device problem into a structured and validated troubleshooting response. It is divided into enrichment, extraction, retrieval integration, and final response construction.
+Contains the core troubleshooting pipeline.
 
-##### `pipeline/enrichment/`
-
-Implements the query-understanding stage of the system.
-
-- `enricher.py` — Processes the raw user query, generates a normalized representation, and produces multiple semantically related query variations for downstream retrieval and caching.
-- `prompts.py` — Contains the prompt definitions used during query enrichment.
-- `schema.py` — Defines the structured output expected from the enrichment stage.
-
-The enrichment stage is responsible for transforming potentially noisy user input into a more consistent representation while preserving the original troubleshooting intent.
-
-It also generates multiple query variations so that later components are not dependent on a single phrasing of the problem.
-
-##### `pipeline/extraction/`
-
-Handles structured troubleshooting information extraction.
-
-- `extractor.py` — Converts SIIS troubleshooting content into structured troubleshooting goals and actions.
-- `prompts.py` — Defines extraction prompts and formatting requirements.
-- `schema.py` — Defines the intermediate structured representation produced by the extraction stage.
-
-The extractor converts source troubleshooting information into individual actions that can subsequently be mapped to device settings and deeplinks.
-
-##### `pipeline/real/`
-
-Contains the production troubleshooting pipeline.
-
-- `pipeline.py` — Coordinates query enrichment, SIIS extraction, deeplink resolution, action construction, validation, and final response generation.
-
-This is the primary pipeline used when a request cannot be satisfied from the semantic cache.
-
-Conceptually, a cold request follows:
+The real pipeline coordinates:
 
 ```text
-User Query
-    |
-    v
 Query Enrichment
-    |
-    v
-SIIS Troubleshooting Extraction
-    |
-    v
-Action Identification
-    |
-    v
-Deeplink Retrieval
-    |
-    v
-Deterministic Verification
-    |
-    v
-Response Construction
-    |
-    v
+      |
+      v
+SIIS Extraction
+      |
+      v
+Action Construction
+      |
+      v
+Deeplink Resolution
+      |
+      v
 Validation
-    |
-    v
-Validated Troubleshooting Response
 ```
 
-##### `pipeline/mock/`
-
-Contains a deterministic mock implementation of the pipeline.
-
-- `mock_pipeline.py` — Provides a pipeline implementation that can be used for controlled testing and development without depending on the complete external AI pipeline.
-
-##### `pipeline/port.py`
-
-Defines the common interface used by pipeline implementations.
-
-Keeping the pipeline behind a common interface allows the surrounding service layer to operate independently of whether the real or mock implementation is being used.
+The `mock/` implementation provides a deterministic alternative for controlled testing and development.
 
 ---
 
 ### Semantic Cache
 
-#### `app/cache/`
+`app/cache/store.py`
 
-Contains the semantic troubleshooting-plan cache.
+Implements the PostgreSQL/pgvector semantic plan cache.
 
-- `store.py` — Implements semantic lookup, plan storage, cache-hit tracking, ambiguity handling, and cache metrics.
+It handles:
 
-Instead of caching only exact strings, the cache stores vector representations of troubleshooting queries and their variations.
+- semantic lookup;
+- query-vector storage;
+- similarity thresholds;
+- ambiguity detection;
+- cache-plan storage;
+- cache metrics;
+- plan reuse.
 
-This allows semantically equivalent requests such as:
-
-```text
-"My screen flashes and becomes blank when I open Gmail."
-```
-
-and:
-
-```text
-"The display starts flashing and turns black whenever I read an email."
-```
-
-to potentially reuse the same validated troubleshooting plan.
-
-The cache uses similarity thresholds together with an ambiguity margin. A result is returned only when the closest cached plan is sufficiently similar and sufficiently distinguishable from competing plans.
-
-The cache path is therefore:
-
-```text
-Incoming Query
-      |
-      v
-Embedding Generation
-      |
-      v
-Vector Similarity Search
-      |
-      +--------------------+
-      |                    |
-   Valid Hit             Cache Miss
-      |                    |
-      v                    v
-Revalidation          Real Pipeline
-      |                    |
-      v                    v
-Return Plan         Validate + Cache
-```
-
-This prevents expensive pipeline execution for troubleshooting requests that have already been solved or are semantic variations of previously solved problems.
+The cache is positioned before the full AI pipeline so valid semantic hits can bypass expensive pipeline execution.
 
 ---
 
 ### Deeplink Retrieval
 
-#### `app/retrieval/`
+`app/retrieval/resolver.py`
 
-Contains the deeplink resolution system.
+Maps troubleshooting actions to compatible entries from the official deeplink catalog.
 
-- `resolver.py` — Searches the indexed deeplink catalog and resolves troubleshooting actions to appropriate device settings destinations.
-
-The resolver combines semantic retrieval with lexical/keyword evidence rather than depending entirely on either approach.
-
-Candidate deeplinks are retrieved from the official catalog and then checked before being attached to an action.
-
-A deeplink is not generated or invented when the catalog does not contain a sufficiently appropriate destination.
-
-The retrieval process can be represented as:
-
-```text
-Troubleshooting Action
-        |
-        v
-Semantic Retrieval
-        +
-Keyword Retrieval
-        |
-        v
-Candidate Ranking
-        |
-        v
-Compatibility Verification
-        |
-        +--------------------+
-        |                    |
-    Valid Match          No Valid Match
-        |                    |
-        v                    v
-Attach Deeplink       Keep Manual Steps
-```
+Retrieval combines semantic and lexical evidence rather than depending entirely on one retrieval method.
 
 ---
 
-### Response Validation
+### Validation
 
-#### `app/validation/`
+`app/validation/rules.py`
 
-Contains deterministic validation rules for generated troubleshooting responses.
+Contains deterministic rules protecting the troubleshooting response contract.
 
-- `rules.py` — Validates response structure, action ordering, descriptions, deeplinks, steps, categories, and other contract requirements.
-
-The validation layer acts as a guard between AI-generated/intermediate content and the final API response.
-
-Among other checks, the validator ensures that:
-
-- generated responses follow the required schema;
-- goals follow the expected troubleshooting/configuration format;
-- action titles and descriptions satisfy formatting constraints;
-- troubleshooting descriptions satisfy the required word limits;
-- individual steps represent executable user interactions;
-- deeplinks originate from the permitted catalog;
-- invalid URLs are not exposed;
-- disruptive or critical actions appear after safer actions.
-
-A generated plan must pass validation before it can be stored and served as a trusted cached response.
+AI-generated or intermediate content cannot bypass this validation layer before becoming a trusted response.
 
 ---
 
-### Embeddings
+### Resolution
 
-#### `app/embeddings/`
+`app/resolution/`
 
-Contains the embedding layer used throughout the system.
+Implements the guided-resolution state machine.
 
-- `encoder.py` — Generates vector representations for queries and searchable text.
+It manages:
 
-Embeddings are shared by multiple components, including:
-
-- semantic cache lookup;
-- paraphrase matching;
-- deeplink retrieval;
-- catalog indexing.
-
-Using a shared embedding layer keeps semantic comparisons consistent across the application.
-
----
-
-### Deeplink Catalog
-
-#### `app/catalog/`
-
-Handles loading, indexing, and querying of the official deeplink dataset.
-
-- `loader.py` — Reads and normalizes catalog records.
-- `indexer.py` — Generates and stores searchable catalog representations.
-- `queries.py` — Provides catalog-related database queries.
-
-The catalog is indexed into PostgreSQL so the retrieval layer can efficiently perform semantic and lexical searches.
-
-The official catalog itself remains separate from runtime-generated troubleshooting plans.
+- resolution sessions;
+- immutable plan snapshots;
+- current action position;
+- session state transitions;
+- verification attempts;
+- critical actions;
+- completion states;
+- resolution receipts.
 
 ---
 
-### API Layer
+### Verification
 
-#### `app/api/`
+`app/verification/`
 
-Contains the REST interface exposed by the application.
+Contains the deterministic verification core.
 
-- `main.py` — Defines the FastAPI application and troubleshooting endpoints.
-- `schemas.py` — Defines API request and response models.
-- `readiness.py` — Performs health and dependency-readiness checks.
+It provides:
 
-The main troubleshooting endpoint passes requests through the service layer rather than directly invoking the AI pipeline.
+- expected-state contracts;
+- evidence-source tracking;
+- value comparison;
+- verification statuses;
+- trusted adapter interfaces;
+- unavailable production adapter;
+- fake trusted adapter for testing.
 
-This is important because it allows every API request to benefit from semantic caching.
-
-The request flow is:
-
-```text
-REST Request
-     |
-     v
-FastAPI
-     |
-     v
-Troubleshooting Service
-     |
-     v
-Semantic Cache
-   /     \
- Hit     Miss
-  |        |
-  |        v
-  |    Real Pipeline
-  |        |
-  +--------+
-     |
-     v
-Validation
-     |
-     v
-API Response
-```
-
-The API also exposes health and cache statistics endpoints for operational visibility.
+Verification decisions are deliberately kept outside the language model.
 
 ---
 
-### Service Layer
+### API
 
-#### `app/service.py`
+`app/api/`
 
-The service layer is the main orchestration boundary between the API, cache, pipeline, validator, and metrics system.
+Exposes the application's REST API.
 
-For each troubleshooting request, the service:
-
-1. generates the query embedding;
-2. performs semantic cache lookup;
-3. checks similarity and ambiguity conditions;
-4. revalidates cached responses before serving them;
-5. invokes the real pipeline when no acceptable cache entry exists;
-6. validates newly generated plans;
-7. stores successful plans and query variations in the semantic cache;
-8. records latency and cache metrics;
-9. returns operational metadata with the troubleshooting response.
-
-This means the API itself does not need to understand whether a response originated from the cache or from the full pipeline.
-
----
-
-### Bootstrap and Runtime
-
-#### `app/bootstrap.py`
-
-Constructs the major application dependencies.
-
-It connects components such as:
-
-- database pool;
-- embedding encoder;
-- catalog;
-- deeplink resolver;
-- validator;
-- pipeline;
-- semantic cache;
-- troubleshooting service.
-
-Centralizing dependency construction keeps application startup consistent between the API, tests, and scripts.
-
-#### `app/config.py`
-
-Defines runtime configuration and environment-backed settings.
-
-Configuration includes values related to:
-
-- database connectivity;
-- model configuration;
-- cache thresholds;
-- ambiguity margins;
-- cache versions;
-- vector search parameters;
-- pipeline behavior.
-
-#### `app/runtime.py`
-
-Contains runtime utilities shared by application entry points.
-
----
-
-### Data Contract
-
-#### `app/contract/`
-
-Contains the canonical troubleshooting response schema.
-
-- `schema.py` — Defines the structured response objects used throughout the system.
-
-Keeping the response contract independent from the API allows the pipeline, validator, cache, and API to operate on the same structured representation.
-
----
-
-### Database Layer
-
-#### `app/db/`
-
-Contains application-level PostgreSQL access.
-
-- `pool.py` — Manages asynchronous database connection pooling.
-- `session.py` — Provides database session/connection helpers.
-- `migrate.py` — Handles database migration execution.
-- `indexes.py` — Handles required database and vector indexes.
-
-PostgreSQL is used as both the persistent application database and the vector-search backend through `pgvector`.
-
----
-
-### Database Schema and Migrations
-
-#### `db/`
-
-Contains SQL required to initialize and evolve the database.
-
-```text
-db/
-├── init/
-│   └── 01_enable_extension.sql
-└── migrations/
-    ├── 001_core_schema.sql
-    ├── 002_official_catalog_fields.sql
-    └── 003_cache_ambiguity.sql
-```
-
-`01_enable_extension.sql` enables the required PostgreSQL extension.
-
-The migrations then establish the core schema, catalog-related fields, semantic cache structures, and ambiguity-related metrics.
-
-This keeps database changes reproducible instead of requiring manual database modification.
-
----
-
-### Official Data
-
-#### `data/official/`
-
-Contains the challenge-provided source data used by the application.
-
-- `input.txt` — Official troubleshooting input data.
-- `siis_responses.json` — SIIS troubleshooting responses used by the pipeline.
-- `deeplinks.json` — Official deeplink catalog.
-- `sample_output.json` — Example of the expected response format.
-- `schema.py` — Schema associated with the supplied dataset.
-
-These files are treated as source data. Runtime-generated cache entries are stored separately in PostgreSQL.
-
-#### `data/handwritten_paraphrases.json`
-
-Contains manually prepared semantic variations used for evaluating cache behavior across differently worded requests.
-
-This allows evaluation to distinguish between exact-string caching and genuine semantic reuse.
-
----
-
-### Scripts
-
-#### `scripts/`
-
-Contains operational and evaluation utilities.
-
-- `init_db.py` — Initializes the database.
-- `build_catalog.py` — Loads and indexes the deeplink catalog.
-- `reset_catalog.py` — Resets/rebuilds catalog state when required.
-- `prewarm_cache.py` — Pre-populates semantic cache entries.
-- `run_api.py` — Starts the REST API.
-- `benchmark.py` — Runs system-level evaluation and produces performance measurements.
-
-These scripts keep common setup and evaluation operations reproducible.
-
----
-
-### Tests
-
-#### `tests/`
-
-Contains unit, integration, pipeline, API, retrieval, validation, database, and cache tests.
-
-Important test groups include:
-
-- `enrichment.py` — Query-enrichment behavior.
-- `extraction.py` — Structured troubleshooting extraction.
-- `deep_link.py` — Deeplink-related behavior.
-- `full_pipeline.py` — End-to-end pipeline behavior.
-- `live_pipeline.py` — Pipeline execution against live model dependencies.
-- `cache_live.py` — Real semantic-cache latency and integration behavior.
-- `test_cache.py` — Cache correctness and edge cases.
-- `test_retrieval.py` — Deeplink retrieval behavior.
-- `test_validation.py` — Deterministic response-validation rules.
-- `test_database_setup.py` — Database and schema readiness.
-- `test_api.py` — REST API behavior and response contract.
-- `test_benchmark_helpers.py` — Benchmark utility behavior.
-- `conftest.py` — Shared pytest fixtures and test configuration.
-
-The test suite separates deterministic tests from live tests where possible so individual components can be verified independently.
+The original troubleshooting endpoints remain available while the resolution routes add the guided troubleshooting and verification workflow.
 
 ---
 
 ### Web Interface
 
-#### `web/`
+`web/`
 
-Contains the browser-based interface for interacting with the troubleshooting system.
+Contains the browser-based user interface.
 
-- `index.html` — Main landing interface.
-- `landing.css` — Landing-page styling.
-- `landing.js` — Landing-page interaction logic.
-- `console.html` — Troubleshooting console interface.
-- `console.css` — Console-specific styling.
-- `app.js` — Frontend application and API interaction logic.
-- `theme.css` — Shared visual theme definitions.
+`app.js` manages the primary troubleshooting experience and communication with the API.
 
-The frontend communicates with the same REST API used by external clients, keeping the user interface separated from the backend troubleshooting logic.
+`resolution.js` powers the guided resolution and verification experience.
+
+The frontend communicates with the same REST API exposed to external clients.
 
 ---
 
-### Evaluation
+### Database
 
-#### `metrics.md`
+`app/db/` contains application-level PostgreSQL access and connection management.
 
-Contains benchmark and evaluation results for the system.
+PostgreSQL is used for:
 
-The evaluation layer measures areas such as:
-
-- response/schema compliance;
-- semantic cache performance;
-- cache-hit latency;
-- cache-hit rate;
-- pipeline latency;
-- deeplink validity;
-- retrieval behavior;
-- URL leakage;
-- semantic paraphrase behavior.
-
-#### `scripts/benchmark.py`
-
-Provides the corresponding benchmark runner used to evaluate these properties across the supplied dataset and paraphrase cases.
+- application persistence;
+- semantic plan caching;
+- vector search through pgvector;
+- deeplink catalog indexing;
+- resolution sessions;
+- verification attempts.
 
 ---
 
-### Environment and Dependencies
+### Resolution Database Migration
 
-#### `.env.example`
+`db/migrations/004_resolution_sessions.sql`
 
-Documents the environment variables required to configure the application without committing credentials to the repository.
+Adds persistence required by the guided-resolution feature.
 
-#### `requirements.txt`
+Resolution sessions and verification attempts are stored separately from shared semantic-cache plans.
 
-Contains the Python dependencies required to run the application.
+Verification attempts are append-only so previous evidence is not silently overwritten.
 
-#### `requirements-dev.txt`
-
-Contains additional dependencies used during development and testing.
-
-#### `docker-compose.yaml`
-
-Defines the containerized PostgreSQL/pgvector database environment used by the project.
-
-#### `pytest.ini`
-
-Contains pytest configuration used by the automated test suite.
+The database also enforces the trust rule that `system_verified` attempts must originate from trusted-adapter evidence.
 
 ---
-
-## System Architecture
-
-At a high level, Guarded Troubleshooting combines an AI-based troubleshooting pipeline with deterministic validation, catalog-grounded deeplink retrieval, and semantic caching.
-
-```text
-                         User Query
-                             |
-                             v
-                     REST API / Web UI
-                             |
-                             v
-                  Troubleshooting Service
-                             |
-                             v
-                    Query Embedding
-                             |
-                             v
-                    Semantic Cache
-                      /           \
-                 Cache Hit      Cache Miss
-                    |               |
-                    |               v
-                    |        Query Enrichment
-                    |               |
-                    |               v
-                    |        SIIS Extraction
-                    |               |
-                    |               v
-                    |       Deeplink Retrieval
-                    |               |
-                    |               v
-                    |      Response Construction
-                    |               |
-                    |               v
-                    |          Validation
-                    |               |
-                    |               v
-                    |         Cache Storage
-                    |               |
-                    +-------+-------+
-                            |
-                            v
-                     Final Validation
-                            |
-                            v
-                       API Response
-```
-
-The architecture is designed so that expensive processing occurs only when necessary. Once a validated troubleshooting plan has been generated, semantically similar future requests can reuse it through the vector cache while still passing through deterministic validation before being returned.
-
-This separation also ensures that AI-generated content does not directly control deeplinks or bypass the response contract. Deeplink candidates originate from the indexed catalog, generated plans are checked against deterministic rules, and only validated responses are returned to the client.
 
 ## Getting Started
 
@@ -706,8 +811,12 @@ This separation also ensures that AI-generated content does not directly control
 Make sure the following are installed:
 
 - Python 3.12+
-- Docker and Docker Compose
+- Docker
+- Docker Compose
 - Git
+- A Gemini API key
+
+---
 
 ### 1. Clone the Repository
 
@@ -716,6 +825,8 @@ git clone https://github.com/Dhanush-Poduval/Guarded_Troubleshooting.git
 cd Guarded_Troubleshooting
 ```
 
+---
+
 ### 2. Create a Virtual Environment
 
 ```bash
@@ -723,35 +834,69 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
+On Windows:
+
+```bash
+.venv\Scripts\activate
+```
+
+---
+
 ### 3. Install Dependencies
+
+Install the runtime dependencies:
 
 ```bash
 pip install -r requirements.txt
+```
 
+For development and testing:
+
+```bash
 pip install -r requirements-dev.txt
 ```
 
+---
+
 ### 4. Configure Environment Variables
 
-Create the environment file from the provided example:
+Create the local environment file from the provided template:
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and provide the required configuration values, including the Gemini API key.
+Add your Gemini API key to `.env`:
 
-### 5. Start PostgreSQL + pgvector
+```env
+GEMINI_API_KEY=your_api_key_here
+```
+
+The remaining local configuration is documented in `.env.example`.
+
+The real `.env` file is intentionally excluded from version control and should not be committed.
+
+---
+
+### 5. Start PostgreSQL and pgvector
 
 ```bash
 docker compose up -d
 ```
 
-Verify that the database container is running:
+Check that the database is running:
 
 ```bash
 docker compose ps
 ```
+
+The default local PostgreSQL instance is exposed on:
+
+```text
+localhost:5433
+```
+
+---
 
 ### 6. Initialize the Database
 
@@ -759,11 +904,19 @@ docker compose ps
 python -m scripts.init_db
 ```
 
+This applies the database migrations, including the guided-resolution session schema.
+
+---
+
 ### 7. Build the Deeplink Catalog
 
 ```bash
 python -m scripts.build_catalog
 ```
+
+This loads and indexes the official deeplink catalog used by the retrieval system.
+
+---
 
 ### 8. Start the Application
 
@@ -771,44 +924,70 @@ python -m scripts.build_catalog
 python -m scripts.run_api
 ```
 
-The application will start at:
-
-```text
-http://127.0.0.1:8000
-```
-
-The same server provides both the REST API and the web interface, so a separate frontend server is not required.
-
-### 9. Verify System Readiness
-
-In another terminal:
-
-```bash
-curl http://127.0.0.1:8000/health
-```
-
-A ready system should report:
-
-```json
-{
-  "status": "ok",
-  "database": true,
-  "embedding_model": true,
-  "vector_indexes": true,
-  "catalog_indexed": true,
-  "cache_ready": true
-}
-```
-
-Then open:
+Open:
 
 ```text
 http://127.0.0.1:8000/
 ```
 
-in your browser to use the troubleshooting interface.
+The FastAPI/Uvicorn process serves both the backend API and the frontend.
 
-### Optional: Run Tests
+A separate frontend server is not required.
+
+---
+
+### 9. Verify System Readiness
+
+Run:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+A ready system reports:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+along with individual dependency-readiness information.
+
+---
+
+## Useful Endpoints
+
+```text
+GET  /health
+GET  /cache/stats
+GET  /v1/examples
+POST /v1/troubleshoot
+```
+
+The guided-resolution endpoints are available under:
+
+```text
+/v1/resolution/
+```
+
+FastAPI interactive API documentation is available at:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+---
+
+## Testing
+
+Install the development dependencies first:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Run the deterministic test suite:
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
@@ -818,8 +997,121 @@ python -m pytest \
 -v
 ```
 
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` prevents unrelated system-wide pytest plugins from interfering with the project's test environment.
+
+Live tests may depend on external services or available model quota and are therefore separable from the deterministic test suite.
+
+The guided resolution and verification functionality is covered by:
+
+```text
+tests/test_resolution.py
+tests/test_resolution_api.py
+tests/test_verification.py
+```
+
+These tests cover behavior including:
+
+- resolution state transitions;
+- deterministic value comparison;
+- trusted evidence;
+- client-reported evidence;
+- user confirmation;
+- critical-action acknowledgement;
+- idempotent observations;
+- resolution receipts;
+- backwards compatibility with the original API.
+
+---
+
+## Data and Persistence
+
+Official challenge data remains under:
+
+```text
+data/official/
+```
+
+Runtime-generated data is stored separately in PostgreSQL.
+
+The semantic cache stores reusable validated troubleshooting plans and their query vectors.
+
+Guided resolution sessions maintain their own plan snapshots so one user's troubleshooting progress does not modify a plan shared through the semantic cache.
+
+Verification attempts are append-only, preserving what was attempted and how the evidence was obtained.
+
+---
+
+## Security and Trust Boundaries
+
+The resolution system is designed to avoid overstating what the application knows.
+
+Key safeguards include:
+
+- Clients cannot inject the deeplink used by the resolution-session cursor.
+- Clients cannot label their own evidence as trusted.
+- Client-reported matching values cannot produce `system_verified`.
+- User confirmation is distinguished from system verification.
+- Critical actions require explicit acknowledgement.
+- Troubleshooting plans are revalidated before guided resolution begins.
+- The database enforces trusted evidence for `system_verified` attempts.
+- Missing device-state access results in unavailable or inconclusive verification rather than fabricated success.
+- Resolution sessions operate on validated plan snapshots instead of mutable client-provided navigation.
+- Deeplinks are obtained from the permitted catalog rather than generated freely by the model.
+
+---
+
+## Evaluation
+
+Evaluation and benchmarking resources include:
+
+```text
+metrics.md
+metrics_prewarmed.md
+scripts/benchmark.py
+scripts/audit_auto_deeplinks.py
+```
+
+The evaluation layer covers areas including:
+
+- response and schema compliance;
+- semantic cache behavior;
+- cache-hit latency;
+- cache-hit rate;
+- pipeline latency;
+- deeplink validity;
+- retrieval behavior;
+- URL leakage;
+- semantic paraphrase behavior;
+- automatic deeplink invariants.
+
+---
+
+## Environment and Dependencies
+
+### `.env.example`
+
+Documents the environment variables required to configure the application without exposing credentials.
+
+### `requirements.txt`
+
+Contains the Python dependencies required to run the application.
+
+### `requirements-dev.txt`
+
+Contains additional development and testing dependencies such as pytest.
+
+### `docker-compose.yaml`
+
+Defines the PostgreSQL and pgvector database environment.
+
+### `pytest.ini`
+
+Contains pytest configuration used by the automated test suite.
+
+---
+
 ## Submission Resources
 
 - Presentation: [View Presentation](./presentation/Smart_Guided_Troubleshooting_Final_Submission_filled.pptx)
 - Demo Video: [Watch Demo Video](https://drive.google.com/file/d/1tVMslTQtBKIP-qObZXfjxNKbqdIfXCeE/view?usp=sharing)
-- Ai Disclosure: [View Disclosure](./ai_disclosure/LangAI3.0_AI_Disclosure.docx)
+- AI Disclosure: [View AI Disclosure](./ai_disclosure/LangAI3.0_AI_Disclosure.docx)
