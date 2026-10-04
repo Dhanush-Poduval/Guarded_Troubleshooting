@@ -34,11 +34,13 @@ from app.api.schemas import (
     TroubleshootRequest,
     TroubleshootResponse,
 )
+from app.api.resolution_routes import router as resolution_router
 from app.bootstrap import build_pool, build_service
 from app.cache.store import cache_stats
 from app.catalog.queries import load_queries
 from app.config import Settings, get_settings
 from app.db.pool import pool_stats
+from app.resolution.service import ResolutionService
 from app.service import TroubleshootingService
 
 logger = logging.getLogger(__name__)
@@ -66,13 +68,24 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.encoder_loaded = False
     app.state.service = None
+    app.state.resolution = None
 
     try:
         # Loading the model takes seconds. Doing it at startup keeps it off the request
         # path, and keeps /health honest: the service is not ready until this finishes.
         app.state.service = await anyio.to_thread.run_sync(build_service, pool, settings)
+        # The resolution loop validates plan snapshots against exactly the catalog set
+        # the troubleshooting service validates against, so it reuses that set rather
+        # than loading the catalog a second time.
+        app.state.resolution = ResolutionService(
+            pool=pool,
+            permitted_deeplinks=app.state.service.permitted_deeplinks,
+        )
         app.state.encoder_loaded = True
-        logger.info("service ready")
+        logger.info(
+            "service ready; resolution adapter=%s",
+            app.state.resolution.adapter_name,
+        )
     except Exception:  # noqa: BLE001 - stay up so /health can report why
         logger.exception("startup failed; /health will report not ready")
 
@@ -232,6 +245,11 @@ def _examples() -> ExamplesResponse:
 def examples() -> ExamplesResponse:
     """The official complaints and their SIIS reference text, for the demo client."""
     return _examples()
+
+
+# Registered before the static mount, since a mount at "/" claims every path no earlier
+# route matched.
+app.include_router(resolution_router)
 
 
 # The web client is mounted last and on purpose. A Starlette mount at "/" matches any path

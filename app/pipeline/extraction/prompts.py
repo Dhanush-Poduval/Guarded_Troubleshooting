@@ -147,12 +147,27 @@ different screen, feature, or physical intervention.
 Use exactly one of:
 
 auto
-- normal Settings/configuration action that can potentially be
-  opened through a deeplink.
+- a Settings or configuration change that lands on a specific
+  Settings screen in the deeplink catalog.
+
+- The catalog covers device Settings screens ONLY. Use auto only
+  when the destination is a Settings screen.
 
 manual
-- physical intervention or action that cannot be represented by
-  an actionable Settings deeplink.
+- physical intervention, or any action whose destination is not a
+  device Settings screen.
+
+- Use manual for opening or navigating inside another application,
+  including Smart Switch, Gmail, the Galaxy Store, Samsung Members
+  and any other app. An app is not a Settings screen.
+
+- Use manual for in-app menus, per-app storage or cache screens,
+  and app-specific display options. These are not in the catalog.
+
+- Use manual when you are unsure whether a Settings screen exists
+  for the action. An action marked auto with no catalog destination
+  is downgraded to manual anyway, so guessing auto gains nothing
+  and makes the plan less accurate.
 
 critical
 - disruptive or potentially irreversible operation such as:

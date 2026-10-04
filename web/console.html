@@ -3,191 +3,395 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Console &middot; Smart Guided Troubleshooting Engine</title>
-<meta name="description" content="Live console: send a Galaxy device complaint and watch it resolve into a validated, deeplinked plan.">
-<link rel="stylesheet" href="theme.css?v=2">
-<link rel="stylesheet" href="console.css?v=2">
+<title>Diagnostic Console — Guarded Troubleshooting</title>
+<meta name="description" content="Diagnostic console: describe a Galaxy device problem, receive a catalog-grounded plan, and verify the outcome step by step.">
+<link rel="stylesheet" href="theme.css?v=7">
+<link rel="stylesheet" href="console.css?v=5">
 </head>
 <body class="is-console">
 
-<header class="chead">
-  <a class="chead__brand" href="/">
-    <span class="mark mark--lg" aria-hidden="true"></span>
-    <span class="chead__text">
-      <strong>
-        Smart Guided Troubleshooting Engine
-        <span class="chead__badge mono">vague complaint &rarr; validated plan</span>
-      </strong>
-      <small>Semantic routing, deterministic validation and deeplinked device diagnosis</small>
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <defs>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></symbol>
+    <symbol id="i-x-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r=".6" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 011-1h3M20 8V5a1 1 0 00-1-1h-3M4 16v3a1 1 0 001 1h3M20 16v3a1 1 0 01-1 1h-3"/><path d="M4 12h16"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.5.5l2-2a5 5 0 00-7-7l-1 1"/><path d="M14 11a5 5 0 00-7.5-.5l-2 2a5 5 0 007 7l1-1"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3M3 10h3M3 14h3M18 10h3M18 14h3"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 18a9 9 0 1116 0"/><path d="M12 14l4-3"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 5v6h-6"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></symbol>
+    <symbol id="i-question" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-.8.6-1.5 1.1-1.5 2"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4"/><path d="M5 5h14l2 8v6H3v-6z"/></symbol>
+  </defs>
+</svg>
+
+<a class="skip" href="#workspace">Skip to the diagnostic workspace</a>
+
+<!-- ============================================================= app shell -->
+<header class="shell">
+  <a class="shell__brand" href="/">
+    <span class="mark" aria-hidden="true"><svg class="icon"><use href="#i-shield"/></svg></span>
+    <span class="shell__id">
+      <strong>Diagnostic Console</strong>
+      <small>Guarded Troubleshooting</small>
     </span>
   </a>
 
-  <div class="chead__right">
+  <div class="shell__status">
     <a class="pill" id="health" href="/health" target="_blank" rel="noopener">
-      <span class="dot" data-state="unknown"></span><span id="health-text">checking&hellip;</span>
+      <span class="dot" data-state="unknown" aria-hidden="true"></span>
+      <span id="health-text">checking&hellip;</span>
+      <span class="visually-hidden">backend readiness, opens the health endpoint</span>
     </a>
-    <a class="pill" href="/docs" target="_blank" rel="noopener">API docs</a>
-    <a class="pill pill--home" href="/">&larr; Overview</a>
+    <span class="pill pill--static" id="cache-pill">
+      <svg class="icon icon--sm" aria-hidden="true"><use href="#i-database"/></svg>
+      <span id="cache-pill-text">cache &mdash;</span>
+    </span>
+  </div>
+
+  <div class="shell__actions">
+    <details class="helpmenu">
+      <summary class="btn btn--sm btn--ghost">
+        <svg class="icon icon--sm" aria-hidden="true"><use href="#i-question"/></svg>
+        About
+      </summary>
+      <div class="helpmenu__panel">
+        <h2>About this console</h2>
+        <p>
+          Describe a device problem in plain words. The engine grounds a plan in the
+          supplied knowledge-store text and resolves each action to a catalog-approved
+          setting.
+        </p>
+        <p>
+          <strong>This deployment cannot read device state.</strong> The catalog ships
+          masked <code>bixby://</code> URIs and this page has no channel to a handset, so
+          automatic checks report <em>verification unavailable</em> and outcomes rest on
+          clearly labelled user confirmation.
+        </p>
+        <a class="btn btn--sm btn--ghost" href="/docs" target="_blank" rel="noopener">API documentation</a>
+      </div>
+    </details>
+    <a class="btn btn--sm btn--ghost" href="/">
+      <svg class="icon icon--sm" aria-hidden="true"><use href="#i-arrow-left"/></svg>
+      Overview
+    </a>
   </div>
 </header>
 
-<main class="cstage">
+<main class="workspace" id="workspace">
 
-  <!-- ---------------------------------------------------------- input side -->
-  <section class="panel cpanel">
-    <div class="panel__head">
-      <div>
-        <span class="eyebrow">Workflow input</span>
-        <h2 class="cpanel__title">Device Support Inspection</h2>
+  <!-- ======================================================== input column -->
+  <section class="col col--input" aria-labelledby="input-h">
+    <div class="panel pad">
+      <div class="panel__head">
+        <h2 id="input-h" class="panel__title">
+          <svg class="icon icon--sm" aria-hidden="true"><use href="#i-scan"/></svg>
+          Diagnostic input
+        </h2>
       </div>
-      <label class="picker">
-        <span class="picker__label">Official complaint</span>
-        <select id="examples" aria-label="Load an official complaint">
-          <option value="">Loading&hellip;</option>
-        </select>
-      </label>
+
+      <form class="ask" id="ask">
+        <div class="field">
+          <label class="field__label" for="examples">Load an official complaint</label>
+          <select id="examples">
+            <option value="">Loading&hellip;</option>
+          </select>
+          <p class="field__hint">Fills the complaint and its reference text from the participant kit.</p>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="query">What is wrong with the device?</label>
+          <textarea id="query" rows="4" required aria-describedby="query-hint"
+            placeholder="My Galaxy S24 Ultra screen is completely black and will not turn on, even though the phone powers on and rings."></textarea>
+          <p class="field__hint" id="query-hint">
+            Natural speech or a verbatim transcript. A longer description resolves more
+            reliably than two or three words.
+          </p>
+        </div>
+
+        <details class="disclosure ref" id="ref-wrap">
+          <summary>
+            <svg class="icon icon--sm" aria-hidden="true"><use href="#i-lock"/></svg>
+            Reference context
+            <span class="badge" id="ref-state" data-tone="warning">none</span>
+            <svg class="icon icon--sm disclosure__chev" aria-hidden="true"><use href="#i-chevron"/></svg>
+          </summary>
+          <div class="disclosure__body">
+            <p class="field__hint">
+              Plans are derived from this text only. Steps are never invented, so with no
+              reference text the engine answers <code>no_siis_context</code> by design.
+            </p>
+            <label class="visually-hidden" for="siis">Knowledge-store reference text</label>
+            <textarea id="siis" rows="6"
+              placeholder="Paste the SIIS response for this complaint, or load an official complaint above."></textarea>
+          </div>
+        </details>
+
+        <div class="ask__actions">
+          <button class="btn btn--primary" id="go" type="submit">
+            <svg class="icon icon--sm" aria-hidden="true"><use href="#i-pulse"/></svg>
+            Generate Plan
+          </button>
+          <button class="btn btn--sm" id="again" type="button" disabled
+            title="Send the identical complaint again to show the semantic cache answering it">
+            Ask again
+          </button>
+          <button class="btn btn--sm btn--quiet" id="reset" type="button">Clear</button>
+        </div>
+      </form>
     </div>
 
-    <form class="ask" id="ask">
-      <div class="field__row">
-        <label class="field__label" for="query">What is wrong with your device?</label>
-        <span class="field__hint">natural speech or verbatim transcript</span>
+    <!-- Collapsed by default: available to whoever wants it, out of the way of the
+         people who do not. -->
+    <details class="disclosure evidence" id="evidence-panel">
+      <summary>
+        <svg class="icon icon--sm" aria-hidden="true"><use href="#i-gauge"/></svg>
+        Evidence &amp; diagnostics
+        <svg class="icon icon--sm disclosure__chev" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </summary>
+      <div class="disclosure__body">
+        <div class="verdict" id="verdict" data-state="idle">
+          <span class="verdict__tag" id="verdict-tag">Awaiting a request</span>
+          <span class="verdict__why" id="verdict-why">Send a complaint to see how it was answered.</span>
+        </div>
+
+        <div class="lat">
+          <div class="lat__top">
+            <span class="lat__label">Total response</span>
+            <span class="lat__num"><b id="lat-total">&mdash;</b> <i>ms end to end</i></span>
+          </div>
+          <div class="lat__rail" aria-hidden="true"><span id="lat-rail"></span></div>
+          <ul class="bars" id="bars">
+            <li data-k="embed"><span class="bars__led" aria-hidden="true"></span><span class="bars__k">Embed vector</span><span class="bars__v">&mdash;</span></li>
+            <li data-k="lookup"><span class="bars__led" aria-hidden="true"></span><span class="bars__k">Cache lookup</span><span class="bars__v">&mdash;</span></li>
+            <li data-k="pipeline"><span class="bars__led" aria-hidden="true"></span><span class="bars__k">Extraction &amp; synthesis</span><span class="bars__v">&mdash;</span></li>
+          </ul>
+        </div>
+
+        <div class="metagrid">
+          <div class="tile"><span class="tile__k">Similarity</span><span class="tile__v tile__v--sm" id="m-sim">&mdash;</span></div>
+          <div class="tile"><span class="tile__k">Model</span><span class="tile__v tile__v--sm" id="m-model">&mdash;</span></div>
+          <div class="tile"><span class="tile__k">Cost</span><span class="tile__v tile__v--sm" id="m-cost">&mdash;</span></div>
+          <div class="tile"><span class="tile__k">Cache version</span><span class="tile__v tile__v--sm" id="m-ver">&mdash;</span></div>
+          <div class="tile"><span class="tile__k">Fallback</span><span class="tile__v tile__v--sm" id="m-fallback">&mdash;</span></div>
+          <div class="tile"><span class="tile__k">Request ID</span><span class="tile__v tile__v--sm mono" id="m-req">&mdash;</span></div>
+        </div>
+
+        <div class="gate" id="gate" data-state="idle">
+          <svg class="icon gate__icon" aria-hidden="true"><use href="#i-shield"/></svg>
+          <div>
+            <strong id="gate-title">Validation gate</strong>
+            <small id="gate-note">Every plan is re-checked against the catalog before it is served &mdash; on cache reads too, not only on writes.</small>
+          </div>
+        </div>
+
+        <details class="disclosure sub" id="vars" hidden>
+          <summary>
+            Phrasings that now reach this plan <span id="vars-count"></span>
+            <svg class="icon icon--sm disclosure__chev" aria-hidden="true"><use href="#i-chevron"/></svg>
+          </summary>
+          <div class="disclosure__body"><ul class="varlist" id="vars-list"></ul></div>
+        </details>
+
+        <details class="disclosure sub">
+          <summary>
+            <svg class="icon icon--sm" aria-hidden="true"><use href="#i-code"/></svg>
+            Raw response payload
+            <svg class="icon icon--sm disclosure__chev" aria-hidden="true"><use href="#i-chevron"/></svg>
+          </summary>
+          <div class="disclosure__body"><pre id="raw" class="raw mono">&mdash;</pre></div>
+        </details>
       </div>
-      <textarea id="query" rows="3" required
-        placeholder="e.g. My Galaxy S24 Ultra screen is completely black and will not turn on, even though the phone powers on and rings."></textarea>
+    </details>
 
-      <details class="ref" id="ref-wrap">
-        <summary>
-          <span class="ref__lock" aria-hidden="true"></span>
-          Reference text from the knowledge store
-          <span class="ref__state" id="ref-state">none</span>
-        </summary>
-        <p class="ref__note">
-          Plans are derived from this text only. Steps are never invented, so with no
-          reference text the engine answers <code>no_siis_context</code> by design.
-        </p>
-        <textarea id="siis" rows="5" placeholder="Paste the SIIS response for this complaint, or pick an official complaint above."></textarea>
-      </details>
-
-      <div class="ask__actions">
-        <button class="btn btn--primary" id="go" type="submit">
-          <span aria-hidden="true">&#10022;</span> Get a plan
+    <div class="panel pad">
+      <div class="panel__head">
+        <h2 class="panel__title">
+          <svg class="icon icon--sm" aria-hidden="true"><use href="#i-database"/></svg>
+          Semantic cache
+        </h2>
+        <button class="btn btn--sm btn--quiet" id="refresh-stats" type="button">
+          <svg class="icon icon--sm" aria-hidden="true"><use href="#i-refresh"/></svg>
+          Refresh
         </button>
-        <button class="btn" id="again" type="button" disabled
-          title="Send the identical complaint again to show the semantic cache answer">Ask again</button>
-        <button class="btn btn--quiet" id="reset" type="button">Clear</button>
       </div>
-    </form>
+      <div class="stats">
+        <div class="tile"><span class="tile__k">Cached plans</span><span class="tile__v" id="s-plans">&mdash;</span></div>
+        <div class="tile"><span class="tile__k">Phrasings</span><span class="tile__v" id="s-vectors">&mdash;</span></div>
+        <div class="tile"><span class="tile__k">Hit rate</span><span class="tile__v" id="s-hitrate">&mdash;</span></div>
+        <div class="tile"><span class="tile__k">Hit p50</span><span class="tile__v tile__v--sm" id="s-hit-p50">&mdash;</span></div>
+        <div class="tile"><span class="tile__k">Hit p95</span><span class="tile__v tile__v--sm" id="s-hit-p95">&mdash;</span></div>
+        <div class="tile"><span class="tile__k">Miss p50</span><span class="tile__v tile__v--sm tile__v--warn" id="s-miss-p50">&mdash;</span></div>
+      </div>
+      <p class="rejects">
+        <span class="rejects__label">Declined rather than answered wrongly:</span>
+        <span class="badge" id="r-threshold">below threshold &mdash;</span>
+        <span class="badge" data-tone="warning" id="r-ambiguous">too ambiguous &mdash;</span>
+        <span class="badge" data-tone="verified" id="r-reval">failed re-validation &mdash;</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- ========================================================= main column -->
+  <section class="col col--main" aria-labelledby="plan-h">
+    <h2 id="plan-h" class="visually-hidden">Diagnostic plan and resolution</h2>
+
+    <div class="panel pad empty-state" id="empty">
+      <div class="empty-state__icon"><svg class="icon" aria-hidden="true"><use href="#i-inbox"/></svg></div>
+      <h3>No diagnostic plan yet</h3>
+      <p>Describe a problem on the left, or load one of the official complaints, then generate a plan.</p>
+    </div>
+
+    <div class="panel pad working" id="working" hidden aria-live="polite">
+      <div class="working__scan" aria-hidden="true"><span></span></div>
+      <p class="working__text" id="working-text">Understanding complaint&hellip;</p>
+      <small class="working__note">
+        A first-time complaint runs the full extraction and enrichment pipeline, so it
+        takes a few seconds. A repeat is answered from the semantic cache.
+      </small>
+      <div class="working__skeleton" aria-hidden="true">
+        <span class="skeleton"></span>
+        <span class="skeleton"></span>
+        <span class="skeleton"></span>
+      </div>
+    </div>
 
     <div class="planhead" id="planhead" hidden>
-      <span class="eyebrow"><span class="eyebrow__bead" aria-hidden="true"></span> <span id="plan-count">Validated diagnostic plan</span></span>
+      <h3 class="planhead__title">
+        <svg class="icon icon--sm" aria-hidden="true"><use href="#i-shield"/></svg>
+        <span id="plan-count">Validated diagnostic plan</span>
+      </h3>
       <span class="planhead__target mono" id="plan-target"></span>
     </div>
 
-    <div class="result" id="result" hidden></div>
+    <div class="result" id="result" hidden aria-live="polite"></div>
 
-    <div class="empty" id="empty">
-      <div class="empty__art" aria-hidden="true"></div>
-      <p><strong>No plan yet.</strong></p>
-      <p>Pick an official complaint, or describe a problem in your own words.</p>
+    <div class="startres panel pad" id="startres" hidden>
+      <div class="startres__body">
+        <h3>Ready to work through this plan?</h3>
+        <p>Take one action at a time and check the result of each before moving on.</p>
+      </div>
+      <button class="btn btn--primary" id="start-resolution" type="button">
+        <svg class="icon icon--sm" aria-hidden="true"><use href="#i-play"/></svg>
+        Start guided resolution
+      </button>
     </div>
 
-    <div class="working" id="working" hidden>
-      <div class="working__bar"><span></span></div>
-      <p id="working-text">Embedding the complaint&hellip;</p>
-      <small>A first-time complaint runs the full extraction and enrichment pipeline, so it takes a few seconds. A repeat is answered from the semantic cache.</small>
-    </div>
+    <section class="res panel" id="res" hidden aria-labelledby="res-h" aria-live="polite">
+      <div class="res__head">
+        <h3 id="res-h" class="panel__title">
+          <svg class="icon icon--sm" aria-hidden="true"><use href="#i-check-circle"/></svg>
+          Verified resolution
+        </h3>
+        <span class="res__progress mono" id="res-progress"></span>
+      </div>
 
-    <div id="screen" hidden></div>
+      <!-- State is carried by node shape, label text and colour together. -->
+      <ol class="rail" id="res-rail">
+        <li class="rail__step" data-k="recommended" data-state="idle">
+          <span class="rail__node" aria-hidden="true"></span>
+          <span class="rail__label">Recommended</span>
+        </li>
+        <li class="rail__step" data-k="opened" data-state="idle">
+          <span class="rail__node" aria-hidden="true"></span>
+          <span class="rail__label">Action opened</span>
+        </li>
+        <li class="rail__step" data-k="awaiting" data-state="idle">
+          <span class="rail__node" aria-hidden="true"></span>
+          <span class="rail__label">Awaiting evidence</span>
+        </li>
+        <li class="rail__step" data-k="evaluating" data-state="idle">
+          <span class="rail__node" aria-hidden="true"></span>
+          <span class="rail__label">Evaluating</span>
+        </li>
+        <li class="rail__step" data-k="verified" data-state="idle">
+          <span class="rail__node" aria-hidden="true"></span>
+          <span class="rail__label">Result</span>
+        </li>
+      </ol>
+
+      <div class="res__banner" id="res-banner" data-state="pending">
+        <svg class="icon res__bicon" id="res-bicon" aria-hidden="true"><use href="#i-info"/></svg>
+        <div>
+          <span class="res__badge" id="res-badge">Awaiting action</span>
+          <span class="res__why" id="res-why">Perform the action below, then check the result.</span>
+        </div>
+      </div>
+
+      <div class="res__action" id="res-action">
+        <div class="res__top">
+          <span class="res__num" id="res-num">1</span>
+          <h4 class="res__name" id="res-name"></h4>
+          <span class="cat" id="res-cat"></span>
+        </div>
+        <p class="res__desc" id="res-desc"></p>
+        <ol class="steps" id="res-steps"></ol>
+        <div class="links" id="res-links"></div>
+      </div>
+
+      <div class="res__check" id="res-check">
+        <div class="res__expect" id="res-expect"></div>
+
+        <div class="res__controls">
+          <button class="btn btn--sm" id="res-verify" type="button">
+            <svg class="icon icon--sm" aria-hidden="true"><use href="#i-scan"/></svg>
+            Check automatically
+          </button>
+          <button class="btn btn--sm" id="res-report" type="button">
+            <svg class="icon icon--sm" aria-hidden="true"><use href="#i-pulse"/></svg>
+            Enter what I see
+          </button>
+          <button class="btn btn--sm btn--ok" id="res-fixed" type="button">
+            <svg class="icon icon--sm" aria-hidden="true"><use href="#i-check"/></svg>
+            This fixed it
+          </button>
+          <button class="btn btn--sm" id="res-notfixed" type="button">Still not fixed</button>
+        </div>
+
+        <div class="res__observe" id="res-observe" hidden>
+          <label class="field__label" for="res-observed" id="res-observe-label">
+            Value shown on your device
+          </label>
+          <div class="res__observerow">
+            <input class="res__input" id="res-observed" type="text" autocomplete="off"
+                   placeholder="e.g. True">
+            <button class="btn btn--sm" id="res-submit" type="button">Submit reading</button>
+          </div>
+          <p class="res__hint">
+            <svg class="icon icon--sm" aria-hidden="true"><use href="#i-alert"/></svg>
+            A value you type is recorded as client-reported evidence. It is never shown as
+            system verified, because this page cannot read your device.
+          </p>
+        </div>
+
+        <div class="res__controls res__controls--advance">
+          <button class="btn btn--sm btn--primary" id="res-next" type="button">
+            Next action
+            <svg class="icon icon--sm" aria-hidden="true"><use href="#i-arrow"/></svg>
+          </button>
+          <button class="btn btn--sm btn--quiet" id="res-abandon" type="button">End session</button>
+        </div>
+      </div>
+
+      <div class="receipt" id="receipt" hidden></div>
+    </section>
   </section>
-
-  <!-- -------------------------------------------------------- evidence side -->
-  <section class="panel cpanel cpanel--evidence">
-    <div class="panel__head">
-      <div>
-        <span class="eyebrow">Verification &amp; trace</span>
-        <h2 class="cpanel__title">Evidence &amp; Latency</h2>
-      </div>
-      <span class="panel__hint">every number is measured on this request</span>
-    </div>
-
-    <div class="verdict" id="verdict" data-state="idle">
-      <span class="verdict__tag" id="verdict-tag">Awaiting a request</span>
-      <span class="verdict__why" id="verdict-why">Send a complaint to see how it was answered.</span>
-    </div>
-
-    <div class="latency">
-      <div class="latency__top">
-        <span class="latency__label">Total pipeline response</span>
-        <span class="latency__num"><b id="lat-total">&mdash;</b> <i>ms end-to-end</i></span>
-      </div>
-      <div class="latency__rail" aria-hidden="true"><span id="lat-rail"></span></div>
-      <ul class="bars" id="bars">
-        <li data-k="embed"><span class="bars__led"></span><span class="bars__k">Embed vector calculation</span><span class="bars__v">&mdash;</span></li>
-        <li data-k="lookup"><span class="bars__led"></span><span class="bars__k">Cache index lookup</span><span class="bars__v">&mdash;</span></li>
-        <li data-k="pipeline"><span class="bars__led"></span><span class="bars__k">Extraction &amp; synthesis</span><span class="bars__v">&mdash;</span></li>
-      </ul>
-    </div>
-
-    <dl class="meta" id="meta">
-      <div><dt>Similarity</dt><dd id="m-sim">&mdash;</dd></div>
-      <div><dt>Model</dt><dd id="m-model">&mdash;</dd></div>
-      <div><dt>Cost</dt><dd id="m-cost">&mdash;</dd></div>
-      <div><dt>Cache version</dt><dd id="m-ver">&mdash;</dd></div>
-      <div><dt>Fallback</dt><dd id="m-fallback">&mdash;</dd></div>
-      <div><dt>Request ID</dt><dd id="m-req" class="mono">&mdash;</dd></div>
-    </dl>
-
-    <div class="gate" id="gate" data-state="idle">
-      <span class="gate__icon" aria-hidden="true"></span>
-      <div>
-        <strong id="gate-title">Validation gate</strong>
-        <small id="gate-note">Every plan is re-checked against the catalog before it is served &mdash; on cache reads too, not only on writes.</small>
-      </div>
-    </div>
-
-    <details class="vars" id="vars" hidden>
-      <summary>Phrasings that now reach this plan <span id="vars-count"></span></summary>
-      <ul id="vars-list"></ul>
-    </details>
-
-    <details class="raw">
-      <summary><span class="mono">&lt;/&gt;</span> Raw response payload</summary>
-      <pre id="raw" class="mono">&mdash;</pre>
-    </details>
-  </section>
-
-  <!-- ---------------------------------------------------------- cache strip -->
-  <section class="panel cpanel cpanel--wide">
-    <div class="panel__head">
-      <div>
-        <span class="eyebrow"><span class="eyebrow__bead" aria-hidden="true"></span> Semantic cache &amp; system performance</span>
-        <p class="cpanel__sub">Measured aggregates across everything this instance has served</p>
-      </div>
-      <button class="btn btn--quiet btn--sm" id="refresh-stats" type="button">&#8635; Refresh</button>
-    </div>
-
-    <div class="stats" id="stats">
-      <div class="stat"><span class="stat__k mono">Cached plans</span><span class="stat__v" id="s-plans">&mdash;</span></div>
-      <div class="stat"><span class="stat__k mono">Indexed phrasings</span><span class="stat__v" id="s-vectors">&mdash;</span></div>
-      <div class="stat"><span class="stat__k mono">Hit rate</span><span class="stat__v" id="s-hitrate">&mdash;</span></div>
-      <div class="stat"><span class="stat__k mono">Hit p50</span><span class="stat__v" id="s-hit-p50">&mdash;</span></div>
-      <div class="stat"><span class="stat__k mono">Hit p95</span><span class="stat__v" id="s-hit-p95">&mdash;</span></div>
-      <div class="stat"><span class="stat__k mono">Miss p50</span><span class="stat__v amber" id="s-miss-p50">&mdash;</span></div>
-    </div>
-
-    <p class="rejects">
-      <span class="rejects__label">Requests the cache declined to answer, rather than answering wrongly:</span>
-      <span class="tagr" id="r-threshold">below threshold &mdash;</span>
-      <span class="tagr tagr--amber" id="r-ambiguous">too ambiguous &mdash;</span>
-      <span class="tagr tagr--green" id="r-reval">failed re-validation &mdash;</span>
-    </p>
-  </section>
-
 </main>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="app.js?v=2"></script>
+<script src="app.js?v=5"></script>
+<script src="resolution.js?v=5"></script>
 </body>
 </html>

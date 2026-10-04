@@ -436,6 +436,43 @@ def validate_action(
                     ),
                 )
 
+    # ------------------------------------------------------------------
+    # The auto invariant.
+    #
+    # "auto" is a promise to the client that the action can be carried out
+    # by opening a setting, so an auto action with nothing to open is a
+    # promise the response cannot keep. The pipeline downgrades such an
+    # action to manual once deeplink resolution comes back empty; this check
+    # is the backstop that keeps one from reaching a user by another route,
+    # including out of the semantic cache, where a plan validated under an
+    # earlier rule set is re-checked on every read.
+    #
+    # Checked per action rather than per step group: an action satisfies the
+    # promise when any of its step groups carries a catalog deeplink.
+    # ------------------------------------------------------------------
+    if action.category == actionCategory.auto:
+
+        # Membership in the catalog is the whole point: an invented URI is not a
+        # destination, so it must not satisfy the invariant merely by being present.
+        # Such an action is reported twice, as an unknown deeplink and as an auto action
+        # without a verified one.
+        has_actionable = any(
+            group.actionableDeeplink is not None
+            and group.actionableDeeplink.deeplink in permitted_deeplinks
+            for group in action.stepGroups
+        )
+
+        if not has_actionable:
+            report.add(
+                "auto_action_missing_deeplink",
+                (
+                    "an auto action must carry a verified "
+                    "actionableDeeplink; classify it as manual "
+                    "when the catalog has no destination"
+                ),
+                f"{path}.category",
+            )
+
 
 def validate_goal(
     goal: Goal,
